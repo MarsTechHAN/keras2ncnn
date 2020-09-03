@@ -318,22 +318,23 @@ class KerasParser:
                 'param': ncnn_graph_attr, 'binary': []})
 
     def Dense_helper(self, layer, ncnn_graph_helper, ncnn_helper):
-        num_output = layer['weight']['kernel:0'].shape[0]
+        num_output = layer['weight']['kernel:0'].shape[1]
 
         bn_params = {}
-        bn_params['bn_kernel'] = np.full([num_output,], 1, dtype=np.float)
-        bn_params['bn_bias'] = np.full([num_output,], 0, dtype=np.float)
-
         for weight_name in layer['weight'].keys():
             bn_params['bn_' + weight_name.replace(':0', '')] = layer['weight'][weight_name]
         
         bn_params['bn_kernel'] = np.transpose(bn_params['bn_kernel'])
+        weight_data_size = int(bn_params['bn_kernel'].size)
+
         bn_params['bn_bias'] = np.asarray(bn_params['bn_bias'])
+
 
         bn_params['bn_kernel'] = np.insert(bn_params['bn_kernel'].flatten(), 0, 0)
 
+
         ncnn_graph_attr = ncnn_helper.dump_args('InnerProduct', num_output=num_output, bias_term=1,
-                                                                weight_data_size = int(bn_params['bn_kernel'].size))
+                                                                weight_data_size = weight_data_size)
             
         ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'InnerProduct', 
@@ -601,5 +602,3 @@ emitter = NcnnEmitter(ncnn_graph)
 emitter.emit_param('ncnn_weight.param')
 emitter.emit_binary('ncnn_weight.bin')
 # Emit the graph to params and bin
-
-
