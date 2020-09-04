@@ -2,6 +2,9 @@ import sys, os
 import logging, argparse
 import json
 
+#import bitstruct.c as bitstruct
+import cbitstruct as bitstruct
+
 import numpy as np
 import h5py
 
@@ -102,57 +105,79 @@ class H5dfParser:
 
 class Grapher:
     def __init__(self):
-        self.garph = {}
+        self.graph = {}
     
     def node(self, name, inbound_nodes=None):
-        self.garph[name] = {}
+        self.graph[name] = {}
         if inbound_nodes != None:
-            self.garph[name]['inbounds'] = inbound_nodes
+            self.graph[name]['inbounds'] = inbound_nodes
             for node in inbound_nodes:
-                if node not in self.garph.keys():
-                    self.garph[node] = {}
-                if 'outbounds' not in self.garph[node].keys():
-                    self.garph[node]['outbounds'] = []
-                self.garph[node]['outbounds'].append(name)
+                if node not in self.graph.keys():
+                    self.graph[node] = {}
+                if 'outbounds' not in self.graph[node].keys():
+                    self.graph[node]['outbounds'] = []
+                self.graph[node]['outbounds'].append(name)
+    
+    def refresh(self):
+        for name in self.graph.keys():
+            self.graph[name]['outbounds'] = []
+
+        for name in self.graph.keys():
+            for node in self.graph[name]['inbounds']:
+                if node not in self.graph.keys():
+                    self.graph[node] = {}
+                self.graph[node]['outbounds'].append(name)
     
     def get_graph(self):
-        return self.garph
+        return self.graph
     
     def get_node_inbounds(self, name):
-        if 'inbounds' in self.garph[name]:
-            return self.garph[name]['inbounds']
+        if 'inbounds' in self.graph[name]:
+            return self.graph[name]['inbounds']
         else:
             return []
     
     def get_node_outbounds(self, name):
-        if 'outbounds' in self.garph[name]:
-            return self.garph[name]['outbounds']
+        if 'outbounds' in self.graph[name]:
+            return self.graph[name]['outbounds']
         else:
             return []
     
+    def remove_node_inbounds(self, name, inbound):
+        self.graph[name]['inbounds'].remove(inbound)
+    
+    def remove_node_outbounds(self, name, outbound):
+        self.graph[name]['outbounds'].remove(outbound)
+    
+    def add_node_inbounds(self, name, inbound):
+        self.graph[name]['inbounds'].append(inbound)
+    
+    def add_node_outbounds(self, name, outbound):
+        self.graph[name]['outbounds'].append(outbound)
+    
     def get_graph_head(self):
         self.heads = []
-        for (key, value) in self.garph.items():
+        for (key, value) in self.graph.items():
             if 'inbounds' not in value.keys() or len(value['inbounds']) == 0:
                 self.heads.append(key)
         return self.heads
     
     def get_graph_tail(self):
         self.tails = []
-        for (key, value) in self.garph.items():
+        for (key, value) in self.graph.items():
             if 'outbounds' not in value.keys() or len(value['outbounds']) == 0:
                 self.tails.append(key)
         return self.tails
     
     def set_node_attr(self, name, attr):
-        if name not in self.garph.keys():
-            self.garph[name] = {}
+        if name not in self.graph.keys():
+            self.graph[name] = {}
             
-        self.garph[name]['attr'] = attr
+        self.graph[name]['attr'] = attr
     
     def get_node_attr(self, name):
-        if name in self.garph.keys():
-            return self.garph[name]['attr']
+        if name in self.graph.keys():
+            return self.graph[name]['attr']
         else:
             return None
     
@@ -160,7 +185,7 @@ class Grapher:
         from graphviz import Digraph
 
         dot = Digraph(comment=comment)
-        for (key, value) in self.garph.items():
+        for (key, value) in self.graph.items():
             dot.node(key, key)
             if 'inbounds' in value.keys():
                 for node in value['inbounds']:
@@ -225,7 +250,8 @@ class KerasParser:
         # Reshape weight, Thanks github.com/Tencent/ncnn/tools/mlir/mlir2ncnn.cpp
         weight = np.insert(np.transpose(layer['weight'], [3, 2, 0, 1]).flatten(), 0, 0)
 
-        num_output = layer['weight'].shape[2]
+        num_output = layer['weight'].shape[2] * layer['layer']['config']['depth_multiplier']
+        group = layer['weight'].shape[2]
 
         kernel_w, kernel_h = layer['layer']['config']['kernel_size']
 
@@ -248,7 +274,7 @@ class KerasParser:
 
         ncnn_graph_attr = ncnn_helper.dump_args('ConvolutionDepthWise', num_output=num_output, kernel_w=kernel_w, 
             dilation_w=dilation_w, stride_w=stride_w, pad_left=pad_left, bias_term=bias_term, 
-            weight_data_size=weight_data_size, kernel_h=kernel_h, dilation_h=dilation_h, stride_h=stride_h)
+            weight_data_size=weight_data_size, group=group, kernel_h=kernel_h, dilation_h=dilation_h, stride_h=stride_h)
 
         ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'ConvolutionDepthWise', 
@@ -301,13 +327,13 @@ class KerasParser:
         if 'max_value' in layer['layer']['config'].keys():
             ncnn_graph_attr = ncnn_helper.dump_args('Clip', max = layer['layer']['config']['max_value'])
             
-            ncnn_graph_helper.node(layer['layer']['name']+'/Clip', self.join_inbound_nodes(layer))
-            ncnn_graph_helper.set_node_attr(layer['layer']['name']+'/Clip', {'type': 'Clip', 
-                'param': ncnn_graph_attr, 'binary': [], 'output_blobs': layer['layer']['name']+'/Clip_blob'})
+            ncnn_graph_helper.node(layer['layer']['name']+'_Clip', self.join_inbound_nodes(layer))
+            ncnn_graph_helper.set_node_attr(layer['layer']['name']+'_Clip', {'type': 'Clip', 
+                'param': ncnn_graph_attr, 'binary': [], 'output_blobs': layer['layer']['name']+'_Clip_blob'})
 
             ncnn_graph_attr = ncnn_helper.dump_args('ReLU', slope = layer['layer']['config']['negative_slope'])
             
-            ncnn_graph_helper.node(layer['layer']['name'], [layer['layer']['name']+'/Clip', ])
+            ncnn_graph_helper.node(layer['layer']['name'], [layer['layer']['name']+'_Clip', ])
             ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'ReLU', 
                 'param': ncnn_graph_attr, 'binary': []})
         else:
@@ -410,8 +436,25 @@ class KerasParser:
         ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'Pooling', 
             'param': ncnn_graph_attr, 'binary': []})  
+    
+    def insert_split(self, ncnn_graph_helper, ncnn_helper):
+        layers = list(ncnn_graph_helper.get_graph().keys())
+        for layer_name in layers:
+            outbound_layers = ncnn_graph_helper.get_node_outbounds(layer_name).copy()
+            if len(outbound_layers) > 1:
+                ncnn_graph_attr = ncnn_helper.dump_args('Split')
 
-    def parse_keras_garph(self, keras_graph_helper, ncnn_graph_helper, ncnn_helper):
+                ncnn_graph_helper.node(layer_name+'_Split', [layer_name, ])
+                ncnn_graph_helper.set_node_attr(layer_name+'_Split', {'type': 'Split', 
+                    'param': ncnn_graph_attr, 'binary': []})  
+                
+                for outbound_layer in outbound_layers:
+                    ncnn_graph_helper.remove_node_inbounds(outbound_layer, layer_name)
+                    ncnn_graph_helper.add_node_inbounds(outbound_layer, layer_name+'_Split')
+        
+        ncnn_graph_helper.refresh()
+
+    def parse_keras_graph(self, keras_graph_helper, ncnn_graph_helper, ncnn_helper):
         for node_name in keras_graph_helper.get_graph().keys():
             node_helper_name = keras_graph_helper.get_node_attr(node_name)['layer']['class_name'] + '_helper'
             if node_helper_name in dir(self):
@@ -419,6 +462,8 @@ class KerasParser:
             else:
                 print(node_helper_name)
                 raise NotImplementedError
+
+        self.insert_split(ncnn_graph_helper, ncnn_helper)
 
 class NcnnParamDispatcher:
     operation_param_table = {
@@ -464,7 +509,8 @@ class NcnnParamDispatcher:
             4: {'pad_left': 0},
             5: {'bias_term': 0},
             6: {'weight_data_size': 0},
-            
+            7: {'group': 1},
+
             11: {'kernel_h': 0},
             12: {'dilation_h': 1},
             13: {'stride_h': 1},
@@ -523,6 +569,10 @@ class NcnnParamDispatcher:
             0: {'axis': 0},
         },
 
+        'Split':{
+
+        },
+
     }
 
     # [layer type] [layer name] [input count] [output count] [input blobs] [output blobs] [layer specific params]
@@ -572,12 +622,30 @@ class NcnnEmitter:
         for layer_name in self.ncnn_graph.get_graph().keys():
             layer_type = self.ncnn_graph.get_node_attr(layer_name)['type']
             input_count = len(self.ncnn_graph.get_node_inbounds(layer_name))
-            output_count = 1 #len(self.ncnn_graph.get_node_outbounds(layer_name))
-            input_blobs = ' '.join(map(lambda x: x+'_blob', self.ncnn_graph.get_node_inbounds(layer_name)))
-            output_blobs = layer_name + '_blob'
+
+            output_count = len(self.ncnn_graph.get_node_outbounds(layer_name))
+            output_count = 1 if output_count == 0 else output_count
+
+            input_blobs = []
+            inbound_nodes = self.ncnn_graph.get_node_inbounds(layer_name)
+            for in_node in inbound_nodes:
+                #print(in_node)
+                if len(self.ncnn_graph.get_node_outbounds(in_node)) > 1:
+                    input_blobs.append('%s_blob_idx_%d' % (in_node, 
+                        self.ncnn_graph.get_node_outbounds(in_node).index(layer_name)))
+                else:
+                    input_blobs.append('%s_blob' % in_node)
+
+            output_blobs = []
+            if output_count > 1:
+                for i in range(output_count):
+                    output_blobs.append('%s_blob_idx_%d' % (layer_name, i))
+            else:
+                output_blobs.append('%s_blob' % layer_name)
+
             ncnn_param_file.write(('%s'+(25 - len(layer_type))*' '+'%s'+(40 - len(layer_name))*' '+'%d %d %s %s %s\n') % 
-                            (layer_type, layer_name, input_count, output_count, input_blobs, 
-                            output_blobs, self.ncnn_graph.get_node_attr(layer_name)['param']))
+                            (layer_type, layer_name, input_count, output_count, ' '.join(input_blobs), 
+                            ' '.join(output_blobs), self.ncnn_graph.get_node_attr(layer_name)['param']))
     
     def emit_binary(self, file_name):
         output_blob = b''
@@ -596,9 +664,11 @@ ncnn_graph = Grapher()
 H5dfParser(sys.argv[1]).parse_graph(keras_graph)
 
 # Convert keras to ncnn representations
-KerasParser().parse_keras_garph(keras_graph, ncnn_graph, NcnnParamDispatcher())
+KerasParser().parse_keras_graph(keras_graph, ncnn_graph, NcnnParamDispatcher())
 
 emitter = NcnnEmitter(ncnn_graph)
 emitter.emit_param('ncnn_weight.param')
 emitter.emit_binary('ncnn_weight.bin')
 # Emit the graph to params and bin
+
+
