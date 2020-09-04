@@ -144,10 +144,12 @@ class Grapher:
             return []
     
     def remove_node_inbounds(self, name, inbound):
-        self.graph[name]['inbounds'].remove(inbound)
+        if inbound in self.graph[name]['inbounds']:
+            self.graph[name]['inbounds'].remove(inbound)
     
     def remove_node_outbounds(self, name, outbound):
-        self.graph[name]['outbounds'].remove(outbound)
+        if outbound in self.graph[name]['outbound']:
+            self.graph[name]['outbounds'].remove(outbound)
     
     def add_node_inbounds(self, name, inbound):
         self.graph[name]['inbounds'].append(inbound)
@@ -211,17 +213,16 @@ class KerasParser:
         ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'Input', 
                     'param': ncnn_graph_attr, 'binary': []})
+                
+        self.insert_split(layer['layer']['name'], ncnn_graph_helper, ncnn_helper)
 
     def Conv2D_helper(self, layer, ncnn_graph_helper, ncnn_helper):
         # Reshape weight, Thanks github.com/Tencent/ncnn/tools/mlir/mlir2ncnn.cpp
         weight = np.insert(np.transpose(layer['weight'], [3, 2, 0, 1]).flatten(), 0, 0)
         
         num_output = layer['layer']['config']['filters']
-
         kernel_w, kernel_h = layer['layer']['config']['kernel_size']
-
         dilation_w, dilation_h = layer['layer']['config']['dilation_rate']
-
         stride_w, stride_h = layer['layer']['config']['strides']
 
         if layer['layer']['config']['padding'] == 'valid':
@@ -245,6 +246,8 @@ class KerasParser:
         ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'Convolution', 
             'param': ncnn_graph_attr, 'binary': [weight]})  
+        
+        self.insert_split(layer['layer']['name'], ncnn_graph_helper, ncnn_helper)
     
     def DepthwiseConv2D_helper(self, layer, ncnn_graph_helper, ncnn_helper):
         # Reshape weight, Thanks github.com/Tencent/ncnn/tools/mlir/mlir2ncnn.cpp
@@ -279,6 +282,8 @@ class KerasParser:
         ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'ConvolutionDepthWise', 
             'param': ncnn_graph_attr, 'binary': [weight]})  
+        
+        self.insert_split(layer['layer']['name'], ncnn_graph_helper, ncnn_helper)
     
     def BatchNormalization_helper(self, layer, ncnn_graph_helper, ncnn_helper):
         num_output = layer['weight']['beta:0'].shape[0]
@@ -299,6 +304,8 @@ class KerasParser:
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'BatchNorm', 
             'param': ncnn_graph_attr, 'binary': [bn_params['bn_gamma'], bn_params['bn_moving_mean'],
                 bn_params['bn_moving_variance'], bn_params['bn_beta']]})  
+            
+        self.insert_split(layer['layer']['name'], ncnn_graph_helper, ncnn_helper)
 
     def Add_helper(self, layer, ncnn_graph_helper, ncnn_helper):
         ncnn_graph_attr = ncnn_helper.dump_args('Eltwise', op_type=1)
@@ -306,6 +313,8 @@ class KerasParser:
         ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'Eltwise', 
             'param': ncnn_graph_attr, 'binary': []})
+        
+        self.insert_split(layer['layer']['name'], ncnn_graph_helper, ncnn_helper)
 
     def ZeroPadding2D_helper(self, layer, ncnn_graph_helper, ncnn_helper):
         padding_top = layer['layer']['config']['padding'][0][0]
@@ -319,6 +328,8 @@ class KerasParser:
         ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'Padding', 
             'param': ncnn_graph_attr, 'binary': []})
+        
+        self.insert_split(layer['layer']['name'], ncnn_graph_helper, ncnn_helper)
 
     def ReLU_helper(self, layer, ncnn_graph_helper, ncnn_helper):
         if layer['layer']['config']['threshold'] != 0:
@@ -336,12 +347,16 @@ class KerasParser:
             ncnn_graph_helper.node(layer['layer']['name'], [layer['layer']['name']+'_Clip', ])
             ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'ReLU', 
                 'param': ncnn_graph_attr, 'binary': []})
+            
+            self.insert_split(layer['layer']['name']+'_Clip', ncnn_graph_helper, ncnn_helper)
         else:
             ncnn_graph_attr = ncnn_helper.dump_args('ReLU', slope = layer['layer']['config']['negative_slope'])
             
             ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
             ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'ReLU', 
                 'param': ncnn_graph_attr, 'binary': []})
+        
+            self.insert_split(layer['layer']['name'], ncnn_graph_helper, ncnn_helper)
 
     def Dense_helper(self, layer, ncnn_graph_helper, ncnn_helper):
         num_output = layer['weight']['kernel:0'].shape[1]
@@ -354,10 +369,7 @@ class KerasParser:
         weight_data_size = int(bn_params['bn_kernel'].size)
 
         bn_params['bn_bias'] = np.asarray(bn_params['bn_bias'])
-
-
         bn_params['bn_kernel'] = np.insert(bn_params['bn_kernel'].flatten(), 0, 0)
-
 
         ncnn_graph_attr = ncnn_helper.dump_args('InnerProduct', num_output=num_output, bias_term=1,
                                                                 weight_data_size = weight_data_size)
@@ -366,6 +378,8 @@ class KerasParser:
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'InnerProduct', 
             'param': ncnn_graph_attr, 'binary': [bn_params['bn_kernel'], bn_params['bn_bias']]
             })
+        
+        self.insert_split(layer['layer']['name'], ncnn_graph_helper, ncnn_helper)
 
     def Permute_helper(self, layer, ncnn_graph_helper, ncnn_helper):
         print(layer)
@@ -385,6 +399,8 @@ class KerasParser:
         ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'Pooling', 
             'param': ncnn_graph_attr, 'binary': []})
+        
+        self.insert_split(layer['layer']['name'], ncnn_graph_helper, ncnn_helper)
     
     def GlobalMaxPooling2D_helper(self, layer, ncnn_graph_helper, ncnn_helper):
         ncnn_graph_attr = ncnn_helper.dump_args('Pooling', pooling_type=0, global_pooling=1)
@@ -392,6 +408,8 @@ class KerasParser:
         ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'Pooling', 
             'param': ncnn_graph_attr, 'binary': []})
+        
+        self.insert_split(layer['layer']['name'], ncnn_graph_helper, ncnn_helper)
 
     def AveragePooling2D_helper(self, layer, ncnn_graph_helper, ncnn_helper):
         kernel_w, kernel_w = layer['layer']['config']['kernel_size']
@@ -414,6 +432,8 @@ class KerasParser:
         ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'Pooling', 
             'param': ncnn_graph_attr, 'binary': []})  
+        
+        self.insert_split(layer['layer']['name'], ncnn_graph_helper, ncnn_helper)
     
     def MaxPooling2D_helper(self, layer, ncnn_graph_helper, ncnn_helper):
         kernel_w, kernel_w = layer['layer']['config']['kernel_size']
@@ -436,23 +456,21 @@ class KerasParser:
         ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
         ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'Pooling', 
             'param': ncnn_graph_attr, 'binary': []})  
-    
-    def insert_split(self, ncnn_graph_helper, ncnn_helper):
-        layers = list(ncnn_graph_helper.get_graph().keys())
-        for layer_name in layers:
-            outbound_layers = ncnn_graph_helper.get_node_outbounds(layer_name).copy()
-            if len(outbound_layers) > 1:
-                ncnn_graph_attr = ncnn_helper.dump_args('Split')
 
-                ncnn_graph_helper.node(layer_name+'_Split', [layer_name, ])
-                ncnn_graph_helper.set_node_attr(layer_name+'_Split', {'type': 'Split', 
-                    'param': ncnn_graph_attr, 'binary': []})  
-                
-                for outbound_layer in outbound_layers:
-                    ncnn_graph_helper.remove_node_inbounds(outbound_layer, layer_name)
-                    ncnn_graph_helper.add_node_inbounds(outbound_layer, layer_name+'_Split')
-        
-        ncnn_graph_helper.refresh()
+        self.insert_split(layer['layer']['name'], ncnn_graph_helper, ncnn_helper)
+
+    def insert_split(self, layer_name, ncnn_graph_helper, ncnn_helper):
+        outbound_layers = ncnn_graph_helper.get_node_outbounds(layer_name).copy()
+        if len(outbound_layers) > 1:
+            ncnn_graph_attr = ncnn_helper.dump_args('Split')
+
+            ncnn_graph_helper.node(layer_name+'_Split', [layer_name, ])
+            ncnn_graph_helper.set_node_attr(layer_name+'_Split', {'type': 'Split', 
+                'param': ncnn_graph_attr, 'binary': []})  
+            
+            for outbound_layer in outbound_layers:
+                ncnn_graph_helper.remove_node_inbounds(outbound_layer, layer_name)
+                ncnn_graph_helper.add_node_inbounds(outbound_layer, layer_name+'_Split')
 
     def parse_keras_graph(self, keras_graph_helper, ncnn_graph_helper, ncnn_helper):
         for node_name in keras_graph_helper.get_graph().keys():
@@ -462,8 +480,8 @@ class KerasParser:
             else:
                 print(node_helper_name)
                 raise NotImplementedError
-
-        self.insert_split(ncnn_graph_helper, ncnn_helper)
+        
+        ncnn_graph_helper.refresh()
 
 class NcnnParamDispatcher:
     operation_param_table = {
@@ -603,6 +621,14 @@ class NcnnParamDispatcher:
                 print(arg_name, params_arg, type(params_arg))
                 raise NotImplementedError
         return ncnn_args_phrase
+    
+    # ncnn_graph_attr = ncnn_helper.dump_args('Pooling', pooling_type=0, kernel_w=kernel_w, 
+    # dilation_w=dilation_w, stride_w=stride_w, pad_left=pad_left, kernel_h=kernel_h, 
+    # dilation_h=dilation_h, stride_h=stride_h)
+
+    # ncnn_graph_helper.node(layer['layer']['name'], self.join_inbound_nodes(layer))
+    # ncnn_graph_helper.set_node_attr(layer['layer']['name'], {'type': 'Pooling', 
+    #     'param': ncnn_graph_attr, 'binary': []})  
 
 class NcnnEmitter:
 
