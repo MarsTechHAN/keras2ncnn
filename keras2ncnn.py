@@ -457,6 +457,12 @@ class KerasParser:
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
+
+        SUPPORTED_ACTIVATION = ['', 'softmax']
+        if layer['layer']['config']['activation'] not in SUPPORTED_ACTIVATION:
+            print(layer)
+            raise NotImplementedError
+
         num_output = layer['weight']['kernel:0'].shape[1]
 
         bn_params = {}
@@ -470,19 +476,57 @@ class KerasParser:
         bn_params['bn_kernel'] = np.insert(
             bn_params['bn_kernel'].flatten(), 0, 0)
 
-        ncnn_graph_attr = ncnn_helper.dump_args(
-            'InnerProduct',
-            num_output=num_output,
-            bias_term=1,
-            weight_data_size=weight_data_size)
-        ncnn_graph_helper.node(
-            layer['layer']['name'],
-            keras_graph_helper.get_node_inbounds(
-                layer['layer']['name']))
-        ncnn_graph_helper.set_node_attr(
-            layer['layer']['name'], {
-                'type': 'InnerProduct', 'param': ncnn_graph_attr, 'binary': [
-                    bn_params['bn_kernel'], bn_params['bn_bias']]})
+        if layer['layer']['config']['activation'] == '':
+            ncnn_graph_attr = ncnn_helper.dump_args(
+                'InnerProduct',
+                num_output=num_output,
+                bias_term=1,
+                weight_data_size=weight_data_size)
+            ncnn_graph_helper.node(
+                layer['layer']['name'],
+                keras_graph_helper.get_node_inbounds(
+                    layer['layer']['name']))
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'InnerProduct', 'param': ncnn_graph_attr, 'binary': [
+                        bn_params['bn_kernel'], bn_params['bn_bias']]})
+        else:
+            ncnn_graph_attr = ncnn_helper.dump_args(
+                'InnerProduct',
+                num_output=num_output,
+                bias_term=1,
+                weight_data_size=weight_data_size)
+            ncnn_graph_helper.node(
+                layer['layer']['name'],
+                keras_graph_helper.get_node_inbounds(
+                    layer['layer']['name']))
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'InnerProduct', 'param': ncnn_graph_attr, 'binary': [
+                        bn_params['bn_kernel'], bn_params['bn_bias']]})
+
+            outbound_layers = []
+
+            for name in keras_graph_helper.get_graph().keys():
+                for node in keras_graph_helper.get_graph()[name]['inbounds']:
+                    if layer['layer']['name'] == node:
+                        outbound_layers.append(name)
+
+            ncnn_graph_attr = ncnn_helper.dump_args('Softmax')
+            ncnn_graph_helper.node(
+                layer['layer']['name'] + '_Softmax', [layer['layer']['name'], ])
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'] + '_Softmax', {
+                    'type': 'Softmax', 'param': ncnn_graph_attr, 'binary': []})
+
+            keras_graph_helper.node(
+                layer['layer']['name'] + '_Softmax', [layer['layer']['name'], ])
+
+            for outbound_layer in outbound_layers:
+                keras_graph_helper.remove_node_inbounds(
+                    outbound_layer, layer['layer']['name'])
+                keras_graph_helper.add_node_inbounds(
+                    outbound_layer, layer['layer']['name'] + '_Softmax')
 
     def Permute_helper(
             self,
@@ -916,6 +960,7 @@ class KerasDebugger:
         'BatchNormalization',
 
         'ReLU',
+        'Softmax',
 
         'InnerProduct',
         'Dense']
@@ -959,6 +1004,8 @@ class KerasDebugger:
     def decode(self, log_file):
         from tensorflow.python import keras  # pylint: disable=import-outside-toplevel
         from tensorflow.python.keras import backend as K  # pylint: disable=import-outside-toplevel
+        K.set_learning_phase(0)
+
         from PIL import Image  # pylint: disable=import-outside-toplevel
         from matplotlib import pyplot as plt  # pylint: disable=import-outside-toplevel
         from numpy import linalg  # pylint: disable=import-outside-toplevel
@@ -994,41 +1041,110 @@ class KerasDebugger:
                 output_node_name.append(model.layers[layer_idx].name)
                 output_nodes.append(model.layers[layer_idx].output)
 
-        functor = K.function([model.input, K.learning_phase()], output_nodes)
+        functor = K.function([model.input], output_nodes)
         layer_outs = functor([test_img[np.newaxis, ...], 1.])
 
         keras_layer_dumps = dict(zip(output_node_name, layer_outs))
 
-        # Join two results
-        for layer_name in keras_layer_dumps.keys():
+        for ncnn_layer_name in ncnn_layer_dumps.keys():
+
+            if '_Split' in ncnn_layer_name:
+                continue
+
+            if '_Softmax' in ncnn_layer_name:
+                layer_name = ncnn_layer_name.strip('_Softmax')
+            else:
+                if ncnn_layer_name + '_Softmax' in ncnn_layer_dumps.keys():
+                    continue
+                layer_name = ncnn_layer_name
+
             print('==================================')
+
             print(
                 'Layer Name: %s, Layer Shape: keras->%s ncnn->%s' %
-                (layer_name, str(
+                (ncnn_layer_name, str(
                     keras_layer_dumps[layer_name].shape), str(
-                    ncnn_layer_dumps[layer_name].shape)))
+                    ncnn_layer_dumps[ncnn_layer_name].shape)))
             print(
-                'Max: \tkeras->%.03f ncnn->%.03f \tMin: \tkeras->%.03f ncnn->%.03f' %
+                'Max: \tkeras->%.03f ncnn->%.03f \tMin: keras->%.03f ncnn->%.03f' %
                 (keras_layer_dumps[layer_name].flatten().max(),
-                 ncnn_layer_dumps[layer_name].flatten().max(),
+                 ncnn_layer_dumps[ncnn_layer_name].flatten().max(),
                  keras_layer_dumps[layer_name].flatten().min(),
-                 ncnn_layer_dumps[layer_name].flatten().min()))
+                 ncnn_layer_dumps[ncnn_layer_name].flatten().min()))
             print(
-                'Mean: \tkeras->%.03f ncnn->%.03f \tVar: \tkeras->%.03f ncnn->%.03f' %
+                'Mean: \tkeras->%.03f ncnn->%.03f \tVar: keras->%.03f ncnn->%.03f' %
                 (keras_layer_dumps[layer_name].flatten().mean(),
-                 ncnn_layer_dumps[layer_name].flatten().mean(),
+                 ncnn_layer_dumps[ncnn_layer_name].flatten().mean(),
                  keras_layer_dumps[layer_name].flatten().std(),
-                 ncnn_layer_dumps[layer_name].flatten().std()))
+                 ncnn_layer_dumps[ncnn_layer_name].flatten().std()))
 
-            print('Cosine Similarity: %.05f'
-                  % distance.cosine(keras_layer_dumps[layer_name].flatten(),
-                                    ncnn_layer_dumps[layer_name].flatten()))
+            if keras_layer_dumps[layer_name][0].ndim == 3:
+                print(
+                    'Cosine Similarity: %.05f' %
+                    distance.cosine(
+                        keras_layer_dumps[layer_name][0].transpose(
+                            (2, 0, 1)).flatten(), ncnn_layer_dumps[ncnn_layer_name].flatten()))
+
+                print('Keras Feature Map: \t%s' % np.array2string(
+                    keras_layer_dumps[layer_name][0][0:10, 0, 0], suppress_small=True, precision=3))
+                print('Ncnn Feature Map: \t%s' % np.array2string(
+                    ncnn_layer_dumps[ncnn_layer_name][0, 0:10, 0], suppress_small=True, precision=3))
+
+            elif keras_layer_dumps[layer_name][0].ndim == 2:
+                print(
+                    'Cosine Similarity: %.05f' %
+                    distance.cosine(
+                        keras_layer_dumps[layer_name][0].transpose(
+                            (1, 0)).flatten(), ncnn_layer_dumps[ncnn_layer_name].flatten()))
+
+                print('Keras Feature Map: \t%s' % np.array2string(
+                    keras_layer_dumps[layer_name][0][0:10, 0], suppress_small=True, precision=3))
+                print('Ncnn Feature Map: \t%s' % np.array2string(
+                    ncnn_layer_dumps[ncnn_layer_name][0, 0:10], suppress_small=True, precision=3))
+
+            elif keras_layer_dumps[layer_name][0].ndim == 1\
+                    and (ncnn_layer_dumps[ncnn_layer_name].shape[:2] == (1, 1)
+                         or ncnn_layer_dumps[ncnn_layer_name].ndim == 1):
+
+                print(
+                    'Cosine Similarity: %.05f' %
+                    distance.cosine(
+                        keras_layer_dumps[layer_name][0].flatten(),
+                        ncnn_layer_dumps[ncnn_layer_name].flatten()))
+
+                print('Keras Feature Map: \t%s' % np.array2string(
+                    keras_layer_dumps[layer_name][0][0:10], suppress_small=True, precision=3))
+
+                if ncnn_layer_dumps[ncnn_layer_name].ndim == 3:
+                    print('Ncnn Feature Map: \t%s' % np.array2string(
+                        ncnn_layer_dumps[ncnn_layer_name][0, 0, 0:10], suppress_small=True, precision=3))
+
+                keras_index = keras_layer_dumps[layer_name][0].argsort(
+                )[-10:][::-1]
+                keras_top_value = keras_layer_dumps[layer_name][0][keras_index]
+                keras_topk = dict(zip(keras_index, keras_top_value))
+                keras_topk_str = ", ".join(
+                    ("%d:%.03f" % i for i in keras_topk.items()))
+
+                if ncnn_layer_dumps[ncnn_layer_name].ndim == 3:
+                    ncnn_index = ncnn_layer_dumps[ncnn_layer_name][0, 0].argsort(
+                    )[-10:][::-1]
+                    ncnn_top_value = ncnn_layer_dumps[ncnn_layer_name][0,
+                                                                       0][ncnn_index]
+                    ncnn_topk = dict(zip(ncnn_index, ncnn_top_value))
+
+                ncnn_topk_str = ", ".join(
+                    ("%d:%.03f" % i for i in ncnn_topk.items()))
+
+                print(
+                    'Top-k:\nKeras Top-k: \t%s\nncnn Top-k: \t%s' %
+                    (keras_topk_str, ncnn_topk_str))
 
         # Make fancy plots
         fig = plt.figure()
         fig.tight_layout()
 
-        display_features = min(10, len(ncnn_layer_dumps.keys()))
+        display_features = min(100, len(ncnn_layer_dumps.keys()))
         columns = math.ceil(math.sqrt(display_features))
         rows = math.ceil(display_features / columns)
 
@@ -1047,7 +1163,6 @@ class KerasDebugger:
         fig = plt.figure()
         fig.tight_layout()
 
-        display_features = min(10, len(layer_outs))
         columns = math.ceil(math.sqrt(display_features))
         rows = math.ceil(display_features / columns)
 
