@@ -1058,6 +1058,9 @@ class KerasDebugger:
                     continue
                 layer_name = ncnn_layer_name
 
+            if layer_name not in keras_layer_dumps:
+                continue
+
             print('==================================')
 
             print(
@@ -1120,21 +1123,32 @@ class KerasDebugger:
                         ncnn_layer_dumps[ncnn_layer_name][0, 0, 0:10], suppress_small=True, precision=3))
 
                 keras_index = keras_layer_dumps[layer_name][0].argsort(
-                )[-10:][::-1]
+                )[-5:][::-1]
                 keras_top_value = keras_layer_dumps[layer_name][0][keras_index]
                 keras_topk = dict(zip(keras_index, keras_top_value))
-                keras_topk_str = ", ".join(
-                    ("%d:%.03f" % i for i in keras_topk.items()))
 
                 if ncnn_layer_dumps[ncnn_layer_name].ndim == 3:
                     ncnn_index = ncnn_layer_dumps[ncnn_layer_name][0, 0].argsort(
-                    )[-10:][::-1]
+                    )[-5:][::-1]
                     ncnn_top_value = ncnn_layer_dumps[ncnn_layer_name][0,
                                                                        0][ncnn_index]
                     ncnn_topk = dict(zip(ncnn_index, ncnn_top_value))
 
-                ncnn_topk_str = ", ".join(
-                    ("%d:%.03f" % i for i in ncnn_topk.items()))
+                if os.path.exists('./ImageNetLabels.txt'):
+                    labels = open('ImageNetLabels.txt').readlines()
+
+                    keras_topk_str = ", ".join(
+                        ("%s:%.03f" % (labels[i[0] + 1].strip(), i[1]) for i in keras_topk.items()))
+
+                    ncnn_topk_str = ", ".join(
+                        ("%s:%.03f" % (labels[i[0] + 1].strip(), i[1]) for i in ncnn_topk.items()))
+
+                else:
+                    keras_topk_str = ", ".join(
+                        ("%d:%.03f" % i for i in keras_topk.items()))
+
+                    ncnn_topk_str = ", ".join(
+                        ("%d:%.03f" % i for i in ncnn_topk.items()))
 
                 print(
                     'Top-k:\nKeras Top-k: \t%s\nncnn Top-k: \t%s' %
