@@ -2,8 +2,7 @@
 
 ## This project is still WIP. 
 
-### If you want me to support a model, you can create an issue and attach the keras file. 
-Currently there is no plan for detection or model complex model, but welcome for PR.
+### If you want me to support a model, you can create an issue and attach the keras h5df file. 
 
 ---
 
@@ -19,7 +18,8 @@ Currently there is no plan for detection or model complex model, but welcome for
 - AveragePooling2D
 - MaxPooling2D
 - BatchNormalization
-- Dense (With or withour softmax activation)
+- Dense (With none, linear or softmax activation)
+- Activation (relu only for now)
 
 ## Ops that dont work but have done coding
 
