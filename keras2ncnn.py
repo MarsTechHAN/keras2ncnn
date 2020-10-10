@@ -1,11 +1,32 @@
 import sys
 import os
 import math
+import copy
 import argparse
 import json
 import numpy as np
 import h5py
 
+class GraphOptimization:
+
+    @staticmethod
+    def removing_unused_nodes(graph):
+        UNUSED_NODES = ['Dropout']
+        nodes_to_remove = []
+
+        for removed_node_type in UNUSED_NODES:
+            for target_node_name in graph.get_graph().keys():
+                if graph.get_node_attr(target_node_name)['layer']['class_name'] in UNUSED_NODES:
+                    for layer_name in graph.get_graph().keys():
+                        if target_node_name in graph.get_graph()[layer_name]['inbounds']:
+                            graph.remove_node_inbounds(
+                                layer_name, target_node_name)
+                            graph.add_node_inbounds(
+                                layer_name, graph.get_graph()[target_node_name]['inbounds'][0])
+                    nodes_to_remove.append(target_node_name)
+        
+        for removed_nodes_name in nodes_to_remove:
+            graph.remove_node(removed_nodes_name)           
 
 class H5dfParser:
     def __init__(self, h5_file):
@@ -126,14 +147,16 @@ class Grapher:
             self.graph[name]['outbounds'] = []
 
         for name in self.graph.keys():
-            for node in self.graph[name]['inbounds']:
+            node_inbounds = copy.deepcopy(self.graph[name]['inbounds'])
+
+            for node in node_inbounds:
                 if node not in self.graph.keys():
-                    raise NotImplementedError
-
-                if 'outbounds' not in self.graph[node].keys():
-                    self.graph[node]['outbounds'] = []
-
-                self.graph[node]['outbounds'].append(name)
+                    self.graph[name]['inbounds'].remove(node)
+                else:
+                    if 'outbounds' not in self.graph[node].keys():
+                        self.graph[node]['outbounds'] = []
+                
+                    self.graph[node]['outbounds'].append(name)
 
     def get_graph(self):
         return self.graph
@@ -155,6 +178,10 @@ class Grapher:
 
     def set_node_outbounds(self, name, outbounds):
         self.graph[name]['outbounds'] = outbounds
+    
+    def remove_node(self, name):
+        if name in self.graph.keys():
+            del self.graph[name]
 
     def remove_node_inbounds(self, name, inbound):
         if inbound in self.graph[name]['inbounds']:
@@ -382,6 +409,77 @@ class KerasParser:
             layer['layer']['name'], {
                 'type': 'Eltwise', 'param': ncnn_graph_attr, 'binary': []})
 
+    def Activation_helper(
+            self,
+            layer,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper):
+
+        SUPPORTED_ACTIVATION = ['relu', ]
+
+        if layer['layer']['config']['activation'] not in SUPPORTED_ACTIVATION:
+            print(layer['layer'])
+            raise NotImplementedError
+
+        if layer['layer']['config']['activation'] == 'relu':
+            if 'alpha' in layer['layer']['config'].keys():
+                negtive_slope = layer['layer']['config']['alpha']
+            else:
+                negtive_slope = 0.0
+            
+            if 'max_value' in layer['layer']['config'].keys():
+                ncnn_graph_attr = ncnn_helper.dump_args(
+                    'Clip', max=layer['layer']['config']['max_value'])
+                ncnn_graph_helper.node(
+                    layer['layer']['name'] + '_Clip',
+                    keras_graph_helper.get_node_inbounds(
+                        layer['layer']['name']))
+                ncnn_graph_helper.set_node_attr(
+                    layer['layer']['name'] + '_Clip',
+                    {
+                        'type': 'Clip',
+                        'param': ncnn_graph_attr,
+                        'binary': [],
+                        'output_blobs': layer['layer']['name'] + '_Clip_blob'})
+
+                ncnn_graph_attr = ncnn_helper.dump_args(
+                    'ReLU', slope=negtive_slope)
+                ncnn_graph_helper.node(
+                    layer['layer']['name'], [
+                        layer['layer']['name'] + '_Clip', ])
+                ncnn_graph_helper.set_node_attr(
+                    layer['layer']['name'], {
+                        'type': 'ReLU', 'param': ncnn_graph_attr, 'binary': []})
+            else:
+                ncnn_graph_attr = ncnn_helper.dump_args(
+                    'ReLU', slope=negtive_slope)
+                ncnn_graph_helper.node(
+                    layer['layer']['name'],
+                    keras_graph_helper.get_node_inbounds(
+                        layer['layer']['name']))
+                ncnn_graph_helper.set_node_attr(
+                    layer['layer']['name'], {
+                        'type': 'ReLU', 'param': ncnn_graph_attr, 'binary': []})
+
+    def Flatten_helper(
+            self,
+            layer,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper):
+
+        ncnn_graph_attr = ncnn_helper.dump_args('Flatten')
+
+        ncnn_graph_helper.node(
+            layer['layer']['name'],
+            keras_graph_helper.get_node_inbounds(
+                layer['layer']['name']))
+        ncnn_graph_helper.set_node_attr(
+            layer['layer']['name'], {
+                'type': 'Flatten', 'param': ncnn_graph_attr, 'binary': []})
+
+
     def ZeroPadding2D_helper(
             self,
             layer,
@@ -458,7 +556,7 @@ class KerasParser:
             ncnn_graph_helper,
             ncnn_helper):
 
-        SUPPORTED_ACTIVATION = ['', 'softmax']
+        SUPPORTED_ACTIVATION = ['', 'linear', 'softmax']
         if layer['layer']['config']['activation'] not in SUPPORTED_ACTIVATION:
             print(layer)
             raise NotImplementedError
@@ -476,7 +574,7 @@ class KerasParser:
         bn_params['bn_kernel'] = np.insert(
             bn_params['bn_kernel'].flatten(), 0, 0)
 
-        if layer['layer']['config']['activation'] == '':
+        if layer['layer']['config']['activation'] == '' or layer['layer']['config']['activation'] == 'linear':
             ncnn_graph_attr = ncnn_helper.dump_args(
                 'InnerProduct',
                 num_output=num_output,
@@ -491,42 +589,43 @@ class KerasParser:
                     'type': 'InnerProduct', 'param': ncnn_graph_attr, 'binary': [
                         bn_params['bn_kernel'], bn_params['bn_bias']]})
         else:
-            ncnn_graph_attr = ncnn_helper.dump_args(
-                'InnerProduct',
-                num_output=num_output,
-                bias_term=1,
-                weight_data_size=weight_data_size)
-            ncnn_graph_helper.node(
-                layer['layer']['name'],
-                keras_graph_helper.get_node_inbounds(
-                    layer['layer']['name']))
-            ncnn_graph_helper.set_node_attr(
-                layer['layer']['name'], {
-                    'type': 'InnerProduct', 'param': ncnn_graph_attr, 'binary': [
-                        bn_params['bn_kernel'], bn_params['bn_bias']]})
+            if layer['layer']['config']['activation'] == 'softmax':
+                ncnn_graph_attr = ncnn_helper.dump_args(
+                    'InnerProduct',
+                    num_output=num_output,
+                    bias_term=1,
+                    weight_data_size=weight_data_size)
+                ncnn_graph_helper.node(
+                    layer['layer']['name'],
+                    keras_graph_helper.get_node_inbounds(
+                        layer['layer']['name']))
+                ncnn_graph_helper.set_node_attr(
+                    layer['layer']['name'], {
+                        'type': 'InnerProduct', 'param': ncnn_graph_attr, 'binary': [
+                            bn_params['bn_kernel'], bn_params['bn_bias']]})
 
-            outbound_layers = []
+                outbound_layers = []
 
-            for name in keras_graph_helper.get_graph().keys():
-                for node in keras_graph_helper.get_graph()[name]['inbounds']:
-                    if layer['layer']['name'] == node:
-                        outbound_layers.append(name)
+                for name in keras_graph_helper.get_graph().keys():
+                    for node in keras_graph_helper.get_graph()[name]['inbounds']:
+                        if layer['layer']['name'] == node:
+                            outbound_layers.append(name)
 
-            ncnn_graph_attr = ncnn_helper.dump_args('Softmax')
-            ncnn_graph_helper.node(
-                layer['layer']['name'] + '_Softmax', [layer['layer']['name'], ])
-            ncnn_graph_helper.set_node_attr(
-                layer['layer']['name'] + '_Softmax', {
-                    'type': 'Softmax', 'param': ncnn_graph_attr, 'binary': []})
+                ncnn_graph_attr = ncnn_helper.dump_args('Softmax')
+                ncnn_graph_helper.node(
+                    layer['layer']['name'] + '_Softmax', [layer['layer']['name'], ])
+                ncnn_graph_helper.set_node_attr(
+                    layer['layer']['name'] + '_Softmax', {
+                        'type': 'Softmax', 'param': ncnn_graph_attr, 'binary': []})
 
-            keras_graph_helper.node(
-                layer['layer']['name'] + '_Softmax', [layer['layer']['name'], ])
+                keras_graph_helper.node(
+                    layer['layer']['name'] + '_Softmax', [layer['layer']['name'], ])
 
-            for outbound_layer in outbound_layers:
-                keras_graph_helper.remove_node_inbounds(
-                    outbound_layer, layer['layer']['name'])
-                keras_graph_helper.add_node_inbounds(
-                    outbound_layer, layer['layer']['name'] + '_Softmax')
+                for outbound_layer in outbound_layers:
+                    keras_graph_helper.remove_node_inbounds(
+                        outbound_layer, layer['layer']['name'])
+                    keras_graph_helper.add_node_inbounds(
+                        outbound_layer, layer['layer']['name'] + '_Softmax')
 
     def Permute_helper(
             self,
@@ -593,9 +692,21 @@ class KerasParser:
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        kernel_w, kernel_w = layer['layer']['config']['kernel_size']
 
-        dilation_w, dilation_h = layer['layer']['config']['dilation_rate']
+        if 'kernel_size' in layer['layer']['config'].keys():
+            kernel_w, kernel_h = layer['layer']['config']['kernel_size']
+        else: 
+            if 'pool_size' in layer['layer']['config'].keys():
+                kernel_w, kernel_h = layer['layer']['config']['pool_size']
+            else:
+                print(layer)
+                raise NotImplementedError
+
+        if 'dilation_rate' in layer['layer']['config'].keys():
+            dilation_w, dilation_h = layer['layer']['config']['dilation_rate']
+        else:
+            dilation_w = 1
+            dilation_h = 1
 
         stride_w, stride_h = layer['layer']['config']['strides']
 
@@ -631,9 +742,21 @@ class KerasParser:
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        kernel_w, kernel_w = layer['layer']['config']['kernel_size']
+        
+        if 'kernel_size' in layer['layer']['config'].keys():
+            kernel_w, kernel_h = layer['layer']['config']['kernel_size']
+        else: 
+            if 'pool_size' in layer['layer']['config'].keys():
+                kernel_w, kernel_h = layer['layer']['config']['pool_size']
+            else:
+                print(layer)
+                raise NotImplementedError
 
-        dilation_w, dilation_h = layer['layer']['config']['dilation_rate']
+        if 'dilation_rate' in layer['layer']['config'].keys():
+            dilation_w, dilation_h = layer['layer']['config']['dilation_rate']
+        else:
+            dilation_w = 1
+            dilation_h = 1
 
         stride_w, stride_h = layer['layer']['config']['strides']
 
@@ -717,6 +840,7 @@ class KerasParser:
                         ncnn_helper)
             else:
                 print(node_helper_name)
+                print(keras_graph_helper.get_node_attr(node_name))
                 raise NotImplementedError
 
         keras_graph_helper.refresh()
@@ -783,6 +907,10 @@ class NcnnParamDispatcher:
             0: {'num_output': 0},
             1: {'bias_term': 0},
             2: {'weight_data_size': 0},
+        },
+
+        'Flatten': {
+
         },
 
         'Input': {
@@ -953,13 +1081,13 @@ class KerasDebugger:
         'Convolution',
         'Conv2D',
 
-        'ConvolutionDepthWise',
-        'DepthwiseConv2D',
+        # 'ConvolutionDepthWise',
+        # 'DepthwiseConv2D',
 
-        'BatchNorm',
-        'BatchNormalization',
+        # 'BatchNorm',
+        # 'BatchNormalization',
 
-        'ReLU',
+        # 'ReLU',
         'Softmax',
 
         'InnerProduct',
@@ -1199,6 +1327,7 @@ ncnn_graph = Grapher()
 
 # Read and parse keras file to graph
 H5dfParser(sys.argv[1]).parse_graph(keras_graph)
+GraphOptimization.removing_unused_nodes(keras_graph)
 
 # Convert keras to ncnn representations
 KerasParser().parse_keras_graph(keras_graph, ncnn_graph, NcnnParamDispatcher())
