@@ -1464,30 +1464,42 @@ if __name__ == '__main__':
     ncnn_graph = Grapher()
 
     # Read and parse keras file to graph
+    print('Reading and parsing keras h5df file...')
     H5dfParser(args.input_file).parse_graph(keras_graph)
 
     # Graph Optimization
+    print('Start graph optimizing pass...')
+    print('\tRemoving unused nodes...')
     GraphOptimization.removing_unused_nodes(keras_graph)
+    print('\tRefreshing graph...')
     keras_graph.refresh()
 
     # Convert keras to ncnn representations
+    print('Converting keras graph to ncnn graph...')
     KerasParser().parse_keras_graph(keras_graph, ncnn_graph, NcnnParamDispatcher())
 
     if args.plot_graph:
+        print('Rendering graph plots...')
         keras_graph.plot_graphs(Path(args.input_file).stem + '_keras')
         ncnn_graph.plot_graphs(Path(args.input_file).stem + '_ncnn')
 
     # Emit the graph to params and bin
+    print('Start emitting to ncnn files.')
     if args.output_dir == '':
+        print('\tNo output dir selected, default to current dir.')
         args.output_dir = '.'
 
     emitter = NcnnEmitter(ncnn_graph)
+
+    print('\tEmitting param...')
     emitter.emit_param(
         os.path.join(
             args.output_dir,
             Path(
                 args.input_file).stem +
             '.param'))
+    
+    print('\tEmitting binary...')
     emitter.emit_binary(
         os.path.join(
             args.output_dir,
@@ -1496,7 +1508,10 @@ if __name__ == '__main__':
             '.bin'))
 
     if args.debug:
+        print('Generating ncnn dump helper file...')
         KerasDebugger().dump2c(Path(args.input_file).stem, ncnn_graph)
 
     if args.load_debug_load != '':
         KerasDebugger().decode(args.load_debug_load)
+    
+    print('Done!')
