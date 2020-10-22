@@ -8,6 +8,7 @@ import json
 import numpy as np
 import h5py
 
+
 class GraphOptimization:
 
     @staticmethod
@@ -17,17 +18,20 @@ class GraphOptimization:
 
         for removed_node_type in UNUSED_NODES:
             for target_node_name in graph.get_graph().keys():
-                if graph.get_node_attr(target_node_name)['layer']['class_name'] in UNUSED_NODES:
+                if graph.get_node_attr(target_node_name)[
+                        'layer']['class_name'] in UNUSED_NODES:
                     for layer_name in graph.get_graph().keys():
-                        if target_node_name in graph.get_graph()[layer_name]['inbounds']:
+                        if target_node_name in graph.get_graph()[
+                                layer_name]['inbounds']:
                             graph.remove_node_inbounds(
                                 layer_name, target_node_name)
                             graph.add_node_inbounds(
                                 layer_name, graph.get_graph()[target_node_name]['inbounds'][0])
                     nodes_to_remove.append(target_node_name)
-        
+
         for removed_nodes_name in nodes_to_remove:
-            graph.remove_node(removed_nodes_name)           
+            graph.remove_node(removed_nodes_name)
+
 
 class H5dfParser:
     def __init__(self, h5_file):
@@ -145,7 +149,7 @@ class Grapher:
 
     def refresh(self):
         graph_keys = list(self.graph.keys())
-        
+
         for name in graph_keys:
 
             if len(self.graph[name]['inbounds']) == 0:
@@ -154,12 +158,12 @@ class Grapher:
                     if out_nodes in self.graph.keys():
                         has_valid_outbounds = 1
                         break
-                if has_valid_outbounds == 0:    
+                if has_valid_outbounds == 0:
                     del self.graph[name]
                 else:
-                    self.graph[name]['outbounds'] = []    
+                    self.graph[name]['outbounds'] = []
             else:
-                self.graph[name]['outbounds'] = []     
+                self.graph[name]['outbounds'] = []
 
         for name in self.graph.keys():
             node_inbounds = copy.deepcopy(self.graph[name]['inbounds'])
@@ -170,7 +174,7 @@ class Grapher:
                 else:
                     if 'outbounds' not in self.graph[node].keys():
                         self.graph[node]['outbounds'] = []
-                
+
                     self.graph[node]['outbounds'].append(name)
 
     def get_graph(self):
@@ -193,7 +197,7 @@ class Grapher:
 
     def set_node_outbounds(self, name, outbounds):
         self.graph[name]['outbounds'] = outbounds
-    
+
     def remove_node(self, name):
         if name in self.graph.keys():
             del self.graph[name]
@@ -257,7 +261,7 @@ class KerasParser:
     def InputLayer_helper(self, layer, keras_graph_helper,
                           ncnn_graph_helper, ncnn_helper):
 
-        replaceNone = lambda x: 0 if x == None else x
+        def replaceNone(x): return 0 if x is None else x
 
         input_w = replaceNone(layer['layer']['config']['batch_input_shape'][1])
         input_h = replaceNone(layer['layer']['config']['batch_input_shape'][2])
@@ -276,7 +280,7 @@ class KerasParser:
 
     def Conv2D_helper(self, layer, keras_graph_helper,
                       ncnn_graph_helper, ncnn_helper):
-        
+
         num_output = layer['layer']['config']['filters']
         kernel_w, kernel_h = layer['layer']['config']['kernel_size']
         dilation_w, dilation_h = layer['layer']['config']['dilation_rate']
@@ -293,19 +297,18 @@ class KerasParser:
         if bias_term:
             weight_data_size = int(layer['weight']['kernel:0'].size)
             # Reorder weight, h-w-i-o to o-i-h-w
-            kernel_weight = np.insert(np.transpose(layer['weight']['kernel:0'],
-                                        [3, 2, 0, 1]).flatten(), 0, 0)
+            kernel_weight = np.insert(
+                np.transpose(
+                    layer['weight']['kernel:0'], [
+                        3, 2, 0, 1]).flatten(), 0, 0)
             bias_weight = layer['weight']['bias:0']
         else:
             # Reorder weight, h-w-i-o to o-i-h-w
             weight_data_size = int(layer['weight'].size)
             # Reorder weight, h-w-i-o to o-i-h-w
             weight = np.insert(np.transpose(layer['weight'],
-                                        [3, 2, 0, 1]).flatten(), 0, 0)
+                                            [3, 2, 0, 1]).flatten(), 0, 0)
 
-        
-
-        
         ncnn_graph_attr = ncnn_helper.dump_args(
             'Convolution',
             num_output=num_output,
@@ -327,12 +330,12 @@ class KerasParser:
         if bias_term:
             ncnn_graph_helper.set_node_attr(
                 layer['layer']['name'], {
-                    'type': 'Convolution', 'param': ncnn_graph_attr, 'binary': [kernel_weight, bias_weight]})
+                    'type': 'Convolution', 'param': ncnn_graph_attr, 'binary': [
+                        kernel_weight, bias_weight]})
         else:
             ncnn_graph_helper.set_node_attr(
                 layer['layer']['name'], {
                     'type': 'Convolution', 'param': ncnn_graph_attr, 'binary': [weight]})
-            
 
     def DepthwiseConv2D_helper(
             self,
@@ -463,7 +466,7 @@ class KerasParser:
                 negtive_slope = layer['layer']['config']['alpha']
             else:
                 negtive_slope = 0.0
-            
+
             if 'max_value' in layer['layer']['config'].keys():
                 ncnn_graph_attr = ncnn_helper.dump_args(
                     'Clip', max=layer['layer']['config']['max_value'])
@@ -514,7 +517,6 @@ class KerasParser:
         ncnn_graph_helper.set_node_attr(
             layer['layer']['name'], {
                 'type': 'Flatten', 'param': ncnn_graph_attr, 'binary': []})
-
 
     def ZeroPadding2D_helper(
             self,
@@ -595,7 +597,7 @@ class KerasParser:
             ncnn_helper):
 
         ncnn_graph_attr = ncnn_helper.dump_args(
-                'ReLU', slope=layer['layer']['config']['alpha'])
+            'ReLU', slope=layer['layer']['config']['alpha'])
         ncnn_graph_helper.node(
             layer['layer']['name'],
             keras_graph_helper.get_node_inbounds(
@@ -662,7 +664,8 @@ class KerasParser:
                 outbound_layers = []
 
                 for name in keras_graph_helper.get_graph().keys():
-                    for node in keras_graph_helper.get_graph()[name]['inbounds']:
+                    for node in keras_graph_helper.get_graph()[
+                            name]['inbounds']:
                         if layer['layer']['name'] == node:
                             outbound_layers.append(name)
 
@@ -697,14 +700,14 @@ class KerasParser:
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        
+
         DIM_SEQ = [3, 2, 0, 1]
 
         if DIM_SEQ[layer['layer']['config']['axis']] == 0:
             raise NotImplementedError
 
         ncnn_graph_attr = ncnn_helper.dump_args(
-                'Concat', axis=DIM_SEQ[layer['layer']['config']['axis']] - 1)
+            'Concat', axis=DIM_SEQ[layer['layer']['config']['axis']] - 1)
         ncnn_graph_helper.node(
             layer['layer']['name'],
             keras_graph_helper.get_node_inbounds(
@@ -712,20 +715,21 @@ class KerasParser:
         ncnn_graph_helper.set_node_attr(
             layer['layer']['name'], {
                 'type': 'Concat', 'param': ncnn_graph_attr, 'binary': []})
-    
+
     def UpSampling2D_helper(
             self,
             layer,
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        
+
         RESIZE_TYPE = ['', 'nearest', 'bilinear', 'bicubic']
 
         ncnn_graph_attr = ncnn_helper.dump_args(
-                'Interp',   resize_type=RESIZE_TYPE.index(layer['layer']['config']['interpolation']),
-                            height_scale=float(layer['layer']['config']['size'][0]),
-                            width_scale=float(layer['layer']['config']['size'][0]))
+            'Interp', resize_type=RESIZE_TYPE.index(
+                layer['layer']['config']['interpolation']), height_scale=float(
+                layer['layer']['config']['size'][0]), width_scale=float(
+                layer['layer']['config']['size'][0]))
         ncnn_graph_helper.node(
             layer['layer']['name'],
             keras_graph_helper.get_node_inbounds(
@@ -784,7 +788,7 @@ class KerasParser:
 
         if 'kernel_size' in layer['layer']['config'].keys():
             kernel_w, kernel_h = layer['layer']['config']['kernel_size']
-        else: 
+        else:
             if 'pool_size' in layer['layer']['config'].keys():
                 kernel_w, kernel_h = layer['layer']['config']['pool_size']
             else:
@@ -831,10 +835,10 @@ class KerasParser:
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        
+
         if 'kernel_size' in layer['layer']['config'].keys():
             kernel_w, kernel_h = layer['layer']['config']['kernel_size']
-        else: 
+        else:
             if 'pool_size' in layer['layer']['config'].keys():
                 kernel_w, kernel_h = layer['layer']['config']['pool_size']
             else:
@@ -1008,7 +1012,7 @@ class NcnnParamDispatcher:
             2: {'c': 0},
         },
 
-        'Interp':{
+        'Interp': {
             0: {'resize_type': 0},
             1: {'height_scale': 1.0},
             2: {'width_scale': 1.0},
@@ -1420,15 +1424,39 @@ class KerasDebugger:
 
         plt.show()
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input_file', type=str, help='Input h5df file', required=True)
-    parser.add_argument('-o', '--output_dir', type=str, help='Output file dir', default='')
+    parser.add_argument(
+        '-i',
+        '--input_file',
+        type=str,
+        help='Input h5df file',
+        required=True)
+    parser.add_argument(
+        '-o',
+        '--output_dir',
+        type=str,
+        help='Output file dir',
+        default='')
 
-    parser.add_argument('-p', '--plot_graph', action='store_true', help='Virtualize graph.')
-    parser.add_argument('-d', '--debug', action='store_true', help='Output debug C file.')
+    parser.add_argument(
+        '-p',
+        '--plot_graph',
+        action='store_true',
+        help='Virtualize graph.')
+    parser.add_argument(
+        '-d',
+        '--debug',
+        action='store_true',
+        help='Output debug C file.')
 
-    parser.add_argument('-l', '--load_debug_load', type=str, default='', help='Load debug log for comparing.')
+    parser.add_argument(
+        '-l',
+        '--load_debug_load',
+        type=str,
+        default='',
+        help='Load debug log for comparing.')
     args = parser.parse_args()
 
     # Create a source graph and a dest graph
@@ -1438,7 +1466,7 @@ if __name__ == '__main__':
     # Read and parse keras file to graph
     H5dfParser(args.input_file).parse_graph(keras_graph)
 
-    #Graph Optimization
+    # Graph Optimization
     GraphOptimization.removing_unused_nodes(keras_graph)
     keras_graph.refresh()
 
@@ -1446,16 +1474,26 @@ if __name__ == '__main__':
     KerasParser().parse_keras_graph(keras_graph, ncnn_graph, NcnnParamDispatcher())
 
     if args.plot_graph:
-        keras_graph.plot_graphs(Path(args.input_file).stem+'_keras')
-        ncnn_graph.plot_graphs(Path(args.input_file).stem+'_ncnn')
+        keras_graph.plot_graphs(Path(args.input_file).stem + '_keras')
+        ncnn_graph.plot_graphs(Path(args.input_file).stem + '_ncnn')
 
     # Emit the graph to params and bin
     if args.output_dir == '':
         args.output_dir = '.'
 
     emitter = NcnnEmitter(ncnn_graph)
-    emitter.emit_param(os.path.join(args.output_dir, Path(args.input_file).stem + '.param'))
-    emitter.emit_binary(os.path.join(args.output_dir, Path(args.input_file).stem + '.bin'))
+    emitter.emit_param(
+        os.path.join(
+            args.output_dir,
+            Path(
+                args.input_file).stem +
+            '.param'))
+    emitter.emit_binary(
+        os.path.join(
+            args.output_dir,
+            Path(
+                args.input_file).stem +
+            '.bin'))
 
     if args.debug:
         KerasDebugger().dump2c(Path(args.input_file).stem, ncnn_graph)
