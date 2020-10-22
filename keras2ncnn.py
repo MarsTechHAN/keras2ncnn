@@ -724,8 +724,8 @@ class KerasParser:
 
         ncnn_graph_attr = ncnn_helper.dump_args(
                 'Interp',   resize_type=RESIZE_TYPE.index(layer['layer']['config']['interpolation']),
-                            height_scale=layer['layer']['config']['size'][0],
-                            width_scale=layer['layer']['config']['size'][0])
+                            height_scale=float(layer['layer']['config']['size'][0]),
+                            width_scale=float(layer['layer']['config']['size'][0]))
         ncnn_graph_helper.node(
             layer['layer']['name'],
             keras_graph_helper.get_node_inbounds(
@@ -800,11 +800,11 @@ class KerasParser:
         stride_w, stride_h = layer['layer']['config']['strides']
 
         if layer['layer']['config']['padding'] == 'valid':
-            pad_left = 0
+            pad_mode = 1
         elif layer['layer']['config']['padding'] == 'same':
-            pad_left = -233
+            pad_mode = 2
         else:
-            raise NotImplementedError
+            pad_mode = 0
 
         ncnn_graph_attr = ncnn_helper.dump_args(
             'Pooling',
@@ -812,10 +812,10 @@ class KerasParser:
             kernel_w=kernel_w,
             dilation_w=dilation_w,
             stride_w=stride_w,
-            pad_left=pad_left,
             kernel_h=kernel_h,
             dilation_h=dilation_h,
-            stride_h=stride_h)
+            stride_h=stride_h,
+            pad_mode=pad_mode)
 
         ncnn_graph_helper.node(
             layer['layer']['name'],
@@ -850,11 +850,11 @@ class KerasParser:
         stride_w, stride_h = layer['layer']['config']['strides']
 
         if layer['layer']['config']['padding'] == 'valid':
-            pad_left = 0
+            pad_mode = 1
         elif layer['layer']['config']['padding'] == 'same':
-            pad_left = -233
+            pad_mode = 2
         else:
-            raise NotImplementedError
+            pad_mode = 0
 
         ncnn_graph_attr = ncnn_helper.dump_args(
             'Pooling',
@@ -862,10 +862,10 @@ class KerasParser:
             kernel_w=kernel_w,
             dilation_w=dilation_w,
             stride_w=stride_w,
-            pad_left=pad_left,
             kernel_h=kernel_h,
             dilation_h=dilation_h,
-            stride_h=stride_h)
+            stride_h=stride_h,
+            pad_mode=pad_mode)
 
         ncnn_graph_helper.node(
             layer['layer']['name'],
@@ -1021,6 +1021,8 @@ class NcnnParamDispatcher:
             1: {'bottom': 0},
             2: {'left': 0},
             3: {'right': 0},
+            4: {'type': 0},
+            5: {'value': 0}
         },
 
         'Pooling': {
@@ -1031,6 +1033,7 @@ class NcnnParamDispatcher:
             12: {'stride_h': 1},
             3: {'pad_left': 0},
             4: {'global_pooling': 0},
+            5: {'pad_mode': 0},
         },
 
         'ReLU': {
@@ -1447,10 +1450,12 @@ if __name__ == '__main__':
         ncnn_graph.plot_graphs(Path(args.input_file).stem+'_ncnn')
 
     # Emit the graph to params and bin
-    if args.output_dir != '':
-        emitter = NcnnEmitter(ncnn_graph)
-        emitter.emit_param(os.path.join(args.output_dir, Path(args.input_file).stem + '.param'))
-        emitter.emit_binary(os.path.join(args.output_dir, Path(args.input_file).stem + '.bin'))
+    if args.output_dir == '':
+        args.output_dir = '.'
+
+    emitter = NcnnEmitter(ncnn_graph)
+    emitter.emit_param(os.path.join(args.output_dir, Path(args.input_file).stem + '.param'))
+    emitter.emit_binary(os.path.join(args.output_dir, Path(args.input_file).stem + '.bin'))
 
     if args.debug:
         KerasDebugger().dump2c(Path(args.input_file).stem, ncnn_graph)
