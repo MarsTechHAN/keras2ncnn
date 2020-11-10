@@ -127,3 +127,18 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Keras files
+*.h5
+
+# ncnn files
+*.param
+*.bin
+
+# Generate C template
+*.c
+
+# Generate Graph
+*.gv
+*.pdf
+*.jpg
