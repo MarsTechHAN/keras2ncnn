@@ -16,18 +16,17 @@ class GraphOptimization:
         UNUSED_NODES = ['Dropout', 'Lambda']
         nodes_to_remove = []
 
-        for removed_node_type in UNUSED_NODES:
-            for target_node_name in graph.get_graph().keys():
-                if graph.get_node_attr(target_node_name)[
-                        'layer']['class_name'] in UNUSED_NODES:
-                    for layer_name in graph.get_graph().keys():
-                        if target_node_name in graph.get_graph()[
-                                layer_name]['inbounds']:
-                            graph.remove_node_inbounds(
-                                layer_name, target_node_name)
-                            graph.add_node_inbounds(
-                                layer_name, graph.get_graph()[target_node_name]['inbounds'][0])
-                    nodes_to_remove.append(target_node_name)
+        for target_node_name in graph.get_graph().keys():
+            if graph.get_node_attr(target_node_name)[
+                    'layer']['class_name'] in UNUSED_NODES:
+                for layer_name in graph.get_graph().keys():
+                    if target_node_name in graph.get_graph()[
+                            layer_name]['inbounds']:
+                        graph.remove_node_inbounds(
+                            layer_name, target_node_name)
+                        graph.add_node_inbounds(
+                            layer_name, graph.get_graph()[target_node_name]['inbounds'][0])
+                nodes_to_remove.append(target_node_name)
 
         for removed_nodes_name in nodes_to_remove:
             graph.remove_node(removed_nodes_name)
@@ -148,29 +147,14 @@ class Grapher:
                 self.graph[node]['outbounds'].append(name)
 
     def refresh(self):
-        graph_keys = list(self.graph.keys())
-
-        for name in graph_keys:
-
-            if len(self.graph[name]['inbounds']) == 0:
-                has_valid_outbounds = 0
-                for out_nodes in self.graph[name]['outbounds']:
-                    if out_nodes in self.graph.keys():
-                        has_valid_outbounds = 1
-                        break
-                if has_valid_outbounds == 0:
-                    del self.graph[name]
-                else:
-                    self.graph[name]['outbounds'] = []
-            else:
-                self.graph[name]['outbounds'] = []
+        for name in self.graph.keys():
+            self.graph[name]['outbounds'] = []
 
         for name in self.graph.keys():
-            node_inbounds = copy.deepcopy(self.graph[name]['inbounds'])
-
-            for node in node_inbounds:
+            for node in self.graph[name]['inbounds']:
                 if node not in self.graph.keys():
-                    self.graph[name]['inbounds'].remove(node)
+                    while node in self.graph[name]['inbounds']:
+                        self.graph[name]['inbounds'].remove(node)
                 else:
                     if 'outbounds' not in self.graph[node].keys():
                         self.graph[node]['outbounds'] = []
@@ -724,10 +708,13 @@ class KerasParser:
             ncnn_helper):
 
         RESIZE_TYPE = ['', 'nearest', 'bilinear', 'bicubic']
+        if 'interpolation' in layer['layer']['config'].keys():
+            resize_type = RESIZE_TYPE.index(layer['layer']['config']['interpolation'])
+        else:
+            resize_type = RESIZE_TYPE.index('bilinear')
 
         ncnn_graph_attr = ncnn_helper.dump_args(
-            'Interp', resize_type=RESIZE_TYPE.index(
-                layer['layer']['config']['interpolation']), height_scale=float(
+            'Interp', resize_type=resize_type, height_scale=float(
                 layer['layer']['config']['size'][0]), width_scale=float(
                 layer['layer']['config']['size'][0]))
         ncnn_graph_helper.node(
@@ -1182,6 +1169,8 @@ class KerasDebugger:
         '5fd479cbba12050000'
 
     target_operators = [
+        'Input',
+
         'Convolution',
         'Conv2D',
 
@@ -1217,9 +1206,6 @@ class KerasDebugger:
                 extractor_list.append(
                     self.input_extractor_template.replace(
                         '$layer_name$', layer_name))
-                # extractor_list.append(
-                #    self.output_extractor_template.replace(
-                #        '$layer_name$', layer_name))
 
             if layer_type in self.target_operators:
                 extractor_list.append(
@@ -1233,7 +1219,7 @@ class KerasDebugger:
 
         open('%s.c' % file_name, 'w+').write(c_payload)
 
-    def decode(self, log_file):
+    def decode(self, h5_file, log_file):
         from tensorflow.python import keras  # pylint: disable=import-outside-toplevel
         from tensorflow.python.keras import backend as K  # pylint: disable=import-outside-toplevel
         K.set_learning_phase(0)
@@ -1261,8 +1247,8 @@ class KerasDebugger:
                 line_idx = line_idx + 1
 
         # Inference using keras
-        model = keras.models.load_model(sys.argv[1])
-        test_img = np.asarray(Image.open("cat.jpg").resize((224, 224)))
+        model = keras.models.load_model(h5_file)
+        test_img = np.asarray(Image.open(input_image).resize((224, 224)))
         output_node_name = []
         output_nodes = []
 
@@ -1433,6 +1419,7 @@ if __name__ == '__main__':
         type=str,
         help='Input h5df file',
         required=True)
+
     parser.add_argument(
         '-o',
         '--output_dir',
@@ -1445,6 +1432,7 @@ if __name__ == '__main__':
         '--plot_graph',
         action='store_true',
         help='Virtualize graph.')
+
     parser.add_argument(
         '-d',
         '--debug',
@@ -1453,10 +1441,17 @@ if __name__ == '__main__':
 
     parser.add_argument(
         '-l',
-        '--load_debug_load',
+        '--load_debug_log',
         type=str,
         default='',
         help='Load debug log for comparing.')
+
+    parser.add_argument(
+        '-m',
+        '--input_image',
+        type=str,
+        default='',
+        help='Input image for comparing')
     args = parser.parse_args()
 
     # Create a source graph and a dest graph
@@ -1484,34 +1479,33 @@ if __name__ == '__main__':
         ncnn_graph.plot_graphs(Path(args.input_file).stem + '_ncnn')
 
     # Emit the graph to params and bin
-    print('Start emitting to ncnn files.')
-    if args.output_dir == '':
-        print('\tNo output dir selected, default to current dir.')
-        args.output_dir = '.'
-
-    emitter = NcnnEmitter(ncnn_graph)
-
-    print('\tEmitting param...')
-    emitter.emit_param(
-        os.path.join(
-            args.output_dir,
-            Path(
-                args.input_file).stem +
-            '.param'))
     
-    print('\tEmitting binary...')
-    emitter.emit_binary(
-        os.path.join(
-            args.output_dir,
-            Path(
-                args.input_file).stem +
-            '.bin'))
+    if args.output_dir != '':
+        print('Start emitting to ncnn files.')
+        emitter = NcnnEmitter(ncnn_graph)
+
+        print('\tEmitting param...')
+        emitter.emit_param(
+            os.path.join(
+                args.output_dir,
+                Path(
+                    args.input_file).stem +
+                '.param'))
+        
+        print('\tEmitting binary...')
+        emitter.emit_binary(
+            os.path.join(
+                args.output_dir,
+                Path(
+                    args.input_file).stem +
+                '.bin'))
 
     if args.debug:
         print('Generating ncnn dump helper file...')
         KerasDebugger().dump2c(Path(args.input_file).stem, ncnn_graph)
 
-    if args.load_debug_load != '':
-        KerasDebugger().decode(args.load_debug_load)
+    if args.load_debug_log != '':
+        print('Start loading debug log...')
+        KerasDebugger().decode(args.input_file, args.load_debug_log)
     
     print('Done!')
