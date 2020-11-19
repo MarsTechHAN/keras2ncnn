@@ -241,11 +241,14 @@ class Grapher:
 
 class KerasParser:
     MULTI_OUTPUT_OP = []
+    NCNN_ACTIVATION_TYPE = {
+        'relu': 1,
+    }
 
     def InputLayer_helper(self, layer, keras_graph_helper,
                           ncnn_graph_helper, ncnn_helper):
 
-        def replaceNone(x): return 0 if x is None else x
+        def replaceNone(x): return -1 if x is None else x
 
         input_w = replaceNone(layer['layer']['config']['batch_input_shape'][1])
         input_h = replaceNone(layer['layer']['config']['batch_input_shape'][2])
@@ -293,6 +296,15 @@ class KerasParser:
             weight = np.insert(np.transpose(layer['weight'],
                                             [3, 2, 0, 1]).flatten(), 0, 0)
 
+        if 'activation' in layer['layer']['config']:
+            if layer['layer']['config']['activation'] in self.NCNN_ACTIVATION_TYPE.keys():
+                activation_type = self.NCNN_ACTIVATION_TYPE[layer['layer']['config']['activation']]
+            else:
+                print(layer['layer'])
+                raise NotImplementedError
+        else:
+            activation_type = 0
+
         ncnn_graph_attr = ncnn_helper.dump_args(
             'Convolution',
             num_output=num_output,
@@ -304,7 +316,8 @@ class KerasParser:
             weight_data_size=weight_data_size,
             kernel_h=kernel_h,
             dilation_h=dilation_h,
-            stride_h=stride_h)
+            stride_h=stride_h,
+            activation_type=activation_type)
 
         ncnn_graph_helper.node(
             layer['layer']['name'],
@@ -320,6 +333,76 @@ class KerasParser:
             ncnn_graph_helper.set_node_attr(
                 layer['layer']['name'], {
                     'type': 'Convolution', 'param': ncnn_graph_attr, 'binary': [weight]})
+
+    def Conv2DTranspose_helper(self, layer, keras_graph_helper,
+                      ncnn_graph_helper, ncnn_helper):
+
+        num_output = layer['layer']['config']['filters']
+        kernel_w, kernel_h = layer['layer']['config']['kernel_size']
+        dilation_w, dilation_h = layer['layer']['config']['dilation_rate']
+        stride_w, stride_h = layer['layer']['config']['strides']
+
+        if layer['layer']['config']['padding'] == 'valid':
+            pad_left = 0
+        elif layer['layer']['config']['padding'] == 'same':
+            pad_left = -233
+        else:
+            raise NotImplementedError
+
+        bias_term = layer['layer']['config']['use_bias']
+        if bias_term:
+            weight_data_size = int(layer['weight']['kernel:0'].size)
+            # Reorder weight, h-w-i-o to o-i-h-w
+            kernel_weight = np.insert(
+                np.transpose(
+                    layer['weight']['kernel:0'], [
+                        2, 3, 0, 1]).flatten(), 0, 0)
+            bias_weight = layer['weight']['bias:0']
+        else:
+            # Reorder weight, h-w-i-o to o-i-h-w
+            weight_data_size = int(layer['weight'].size)
+            # Reorder weight, h-w-i-o to o-i-h-w
+            weight = np.insert(np.transpose(layer['weight'],
+                                            [2, 3, 0, 1]).flatten(), 0, 0)
+
+        if 'activation' in layer['layer']['config']:
+            if layer['layer']['config']['activation'] in self.NCNN_ACTIVATION_TYPE.keys():
+                activation_type = self.NCNN_ACTIVATION_TYPE[layer['layer']['config']['activation']]
+            else:
+                print(layer['layer'])
+                raise NotImplementedError
+        else:
+            activation_type = 0
+            
+
+        ncnn_graph_attr = ncnn_helper.dump_args(
+            'Deconvolution',
+            num_output=num_output,
+            kernel_w=kernel_w,
+            dilation_w=dilation_w,
+            stride_w=stride_w,
+            pad_left=pad_left,
+            bias_term=bias_term,
+            weight_data_size=weight_data_size,
+            kernel_h=kernel_h,
+            dilation_h=dilation_h,
+            stride_h=stride_h,
+            activation_type=activation_type)
+
+        ncnn_graph_helper.node(
+            layer['layer']['name'],
+            keras_graph_helper.get_node_inbounds(
+                layer['layer']['name']))
+
+        if bias_term:
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'Deconvolution', 'param': ncnn_graph_attr, 'binary': [
+                        kernel_weight, bias_weight]})
+        else:
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'Deconvolution', 'param': ncnn_graph_attr, 'binary': [weight]})
 
     def DepthwiseConv2D_helper(
             self,
@@ -958,9 +1041,38 @@ class NcnnParamDispatcher:
             5: {'bias_term': 0},
             6: {'weight_data_size': 0},
 
+            9: {'activation_type': 0},
+            # 10: {'activation_params': 0},
+
             11: {'kernel_h': 0},
             12: {'dilation_h': 1},
             13: {'stride_h': 1},
+        },
+
+        'Deconvolution': {
+            0: {'num_output': 0},
+            1: {'kernel_w': 0},
+            2: {'dilation_w': 1},
+            3: {'stride_w': 0},
+            4: {'pad_left': 0},
+            5: {'bias_term': 0},
+            6: {'weight_data_size': 0},
+
+            9: {'activation_type': 0},
+            # 10: {'activation_params': 0},
+
+            11: {'kernel_h': 0},
+            12: {'dilation_h': 1},
+            13: {'stride_h': 1},
+            14: {'pad_top': 0},
+            # 15: {'pad_right': 0},
+            # 16: {'pad_bottom': 0},
+
+            # 18: {'output_pad_right': 0},
+            # 19: {'output_pad_bottom': 0},
+
+            # 20: {'output_w': 0},
+            # 21: {'output_h': 0},
         },
 
         'ConvolutionDepthWise': {
@@ -1180,6 +1292,9 @@ class KerasDebugger:
         # 'BatchNorm',
         # 'BatchNormalization',
 
+        'Deconvolution',
+        'Conv2DTranspose',
+
         # 'ReLU',
         'Softmax',
 
@@ -1248,7 +1363,7 @@ class KerasDebugger:
 
         # Inference using keras
         model = keras.models.load_model(h5_file)
-        test_img = np.asarray(Image.open(input_image).resize((224, 224)))
+        test_img = np.asarray(Image.open(args.input_image).resize((224, 224)))
         output_node_name = []
         output_nodes = []
 
