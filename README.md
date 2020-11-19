@@ -19,7 +19,8 @@ python3 keras2ncnn.py -i SOME_H5DF_FILE.h5 -o DIR_TO_SAVE_NCNN_PARAM --load_debu
 ---
 ## Supported Op
 - InputLayer
-- Conv2D
+- Conv2D (With none or relu actiovation, with or without biasAdd)
+- Conv2DTranspose (With none or relu actiovation, with or without biasAdd)
 - DepthwiseConv2D
 - Add
 - ZeroPadding2D
