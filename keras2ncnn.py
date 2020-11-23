@@ -241,8 +241,10 @@ class Grapher:
 
 class KerasParser:
     MULTI_OUTPUT_OP = []
-    NCNN_ACTIVATION_TYPE = {
+    CONV_ACTIVATION_TYPE = {
+        'linear': 0,
         'relu': 1,
+        'sigmoid': 4
     }
 
     def InputLayer_helper(self, layer, keras_graph_helper,
@@ -297,8 +299,9 @@ class KerasParser:
                                             [3, 2, 0, 1]).flatten(), 0, 0)
 
         if 'activation' in layer['layer']['config']:
-            if layer['layer']['config']['activation'] in self.NCNN_ACTIVATION_TYPE.keys():
-                activation_type = self.NCNN_ACTIVATION_TYPE[layer['layer']['config']['activation']]
+            if layer['layer']['config']['activation'] in self.CONV_ACTIVATION_TYPE.keys():
+                activation_type = self.CONV_ACTIVATION_TYPE[layer['layer'][
+                    'config']['activation']]
             else:
                 print(layer['layer'])
                 raise NotImplementedError
@@ -335,7 +338,7 @@ class KerasParser:
                     'type': 'Convolution', 'param': ncnn_graph_attr, 'binary': [weight]})
 
     def Conv2DTranspose_helper(self, layer, keras_graph_helper,
-                      ncnn_graph_helper, ncnn_helper):
+                               ncnn_graph_helper, ncnn_helper):
 
         num_output = layer['layer']['config']['filters']
         kernel_w, kernel_h = layer['layer']['config']['kernel_size']
@@ -366,14 +369,14 @@ class KerasParser:
                                             [2, 3, 0, 1]).flatten(), 0, 0)
 
         if 'activation' in layer['layer']['config']:
-            if layer['layer']['config']['activation'] in self.NCNN_ACTIVATION_TYPE.keys():
-                activation_type = self.NCNN_ACTIVATION_TYPE[layer['layer']['config']['activation']]
+            if layer['layer']['config']['activation'] in self.CONV_ACTIVATION_TYPE.keys():
+                activation_type = self.CONV_ACTIVATION_TYPE[layer['layer'][
+                    'config']['activation']]
             else:
                 print(layer['layer'])
                 raise NotImplementedError
         else:
             activation_type = 0
-            
 
         ncnn_graph_attr = ncnn_helper.dump_args(
             'Deconvolution',
@@ -522,7 +525,7 @@ class KerasParser:
             ncnn_graph_helper,
             ncnn_helper):
 
-        SUPPORTED_ACTIVATION = ['relu', ]
+        SUPPORTED_ACTIVATION = ['relu', 'sigmoid']
 
         if layer['layer']['config']['activation'] not in SUPPORTED_ACTIVATION:
             print(layer['layer'])
@@ -567,6 +570,18 @@ class KerasParser:
                 ncnn_graph_helper.set_node_attr(
                     layer['layer']['name'], {
                         'type': 'ReLU', 'param': ncnn_graph_attr, 'binary': []})
+            return
+
+        if layer['layer']['config']['activation'] == 'sigmoid':
+            ncnn_graph_attr = ncnn_helper.dump_args(
+                'Sigmoid')
+            ncnn_graph_helper.node(
+                layer['layer']['name'],
+                keras_graph_helper.get_node_inbounds(
+                    layer['layer']['name']))
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'Sigmoid', 'param': ncnn_graph_attr, 'binary': []})
 
     def Flatten_helper(
             self,
@@ -792,7 +807,8 @@ class KerasParser:
 
         RESIZE_TYPE = ['', 'nearest', 'bilinear', 'bicubic']
         if 'interpolation' in layer['layer']['config'].keys():
-            resize_type = RESIZE_TYPE.index(layer['layer']['config']['interpolation'])
+            resize_type = RESIZE_TYPE.index(
+                layer['layer']['config']['interpolation'])
         else:
             resize_type = RESIZE_TYPE.index('bilinear')
 
@@ -848,6 +864,37 @@ class KerasParser:
         ncnn_graph_helper.set_node_attr(
             layer['layer']['name'], {
                 'type': 'Pooling', 'param': ncnn_graph_attr, 'binary': []})
+
+    def Reshape_helper(
+            self,
+            layer,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper):
+        target_shape = layer['layer']['config']['target_shape']
+
+        if(len(target_shape) == 4):
+            ncnn_graph_attr = ncnn_helper.dump_args(
+                'Reshape', w=target_shape[2], h=target_shape[1], c=target_shape[3])
+        else:
+            if(len(target_shape) == 3):
+                ncnn_graph_attr = ncnn_helper.dump_args(
+                    'Reshape', w=target_shape[1], h=target_shape[2])
+            else:
+                if(len(target_shape) == 2):
+                    ncnn_graph_attr = ncnn_helper.dump_args(
+                        'Reshape', w=target_shape[1])
+                else:
+                    print(layer)
+                    raise NotImplementedError
+
+        ncnn_graph_helper.node(
+            layer['layer']['name'],
+            keras_graph_helper.get_node_inbounds(
+                layer['layer']['name']))
+        ncnn_graph_helper.set_node_attr(
+            layer['layer']['name'], {
+                'type': 'Reshape', 'param': ncnn_graph_attr, 'binary': []})
 
     def AveragePooling2D_helper(
             self,
@@ -1594,7 +1641,7 @@ if __name__ == '__main__':
         ncnn_graph.plot_graphs(Path(args.input_file).stem + '_ncnn')
 
     # Emit the graph to params and bin
-    
+
     if args.output_dir != '':
         print('Start emitting to ncnn files.')
         emitter = NcnnEmitter(ncnn_graph)
@@ -1606,7 +1653,7 @@ if __name__ == '__main__':
                 Path(
                     args.input_file).stem +
                 '.param'))
-        
+
         print('\tEmitting binary...')
         emitter.emit_binary(
             os.path.join(
@@ -1622,5 +1669,5 @@ if __name__ == '__main__':
     if args.load_debug_log != '':
         print('Start loading debug log...')
         KerasDebugger().decode(args.input_file, args.load_debug_log)
-    
+
     print('Done!')
