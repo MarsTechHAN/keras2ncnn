@@ -69,6 +69,8 @@ class H5dfParser:
             layer = self.f
 
         while True:
+            if layer_name not in layer:
+                return None
             layer = layer[layer_name]
             if (not hasattr(layer, "keys")) or len(layer.keys()) > 1:
                 break
@@ -160,6 +162,16 @@ class Grapher:
                         self.graph[node]['outbounds'] = []
 
                     self.graph[node]['outbounds'].append(name)
+
+        spare_nodes = []
+
+        for name in self.graph.keys():
+            if len(self.graph[name]['outbounds']) == 0 and \
+                    len(self.graph[name]['inbounds']) == 0:
+                spare_nodes.append(name)
+
+        for removing_node_name in spare_nodes:
+            del self.graph[removing_node_name]
 
     def get_graph(self):
         return self.graph
@@ -1248,7 +1260,30 @@ class NcnnEmitter:
         self.MAGGGGGIC = 7767517
         self.ncnn_graph = ncnn_graph
 
-    def emit_param(self, file_name):
+    def get_graph_seq(self):
+
+        graph_head = self.ncnn_graph.get_graph_head()
+        if len(graph_head) > 1:
+            print(graph_head)
+            print("Multi-input graph not supported yet!")
+
+        queue_name = []
+        visited_name = []
+
+        visited_name.append(graph_head[0])
+        queue_name.append(graph_head[0])
+
+        while queue_name:
+            s = queue_name.pop(0)
+
+            for neighbour in self.ncnn_graph.get_node_outbounds(s):
+                if neighbour not in visited_name:
+                    visited_name.append(neighbour)
+                    queue_name.append(neighbour)
+
+        return visited_name
+
+    def emit_param(self, file_name, seq):
         ncnn_param_file = open(file_name, 'w+')
 
         ncnn_param_file.write('%d\n' % self.MAGGGGGIC)
@@ -1257,7 +1292,7 @@ class NcnnEmitter:
         blob_count = len(ncnn_graph.get_graph()) * 2
         ncnn_param_file.write('%d %d\n' % (layer_count, blob_count))
 
-        for layer_name in self.ncnn_graph.get_graph().keys():
+        for layer_name in seq:
             layer_type = self.ncnn_graph.get_node_attr(layer_name)['type']
             input_count = len(self.ncnn_graph.get_node_inbounds(layer_name))
 
@@ -1267,7 +1302,6 @@ class NcnnEmitter:
             input_blobs = []
             inbound_nodes = self.ncnn_graph.get_node_inbounds(layer_name)
             for in_node in inbound_nodes:
-                # print(in_node)
                 if len(self.ncnn_graph.get_node_outbounds(in_node)) > 1:
                     input_blobs.append(
                         '%s_blob_idx_%d' %
@@ -1293,16 +1327,12 @@ class NcnnEmitter:
                                                                          ' '.join(output_blobs),
                                                                          self.ncnn_graph.get_node_attr(layer_name)['param']))
 
-    def emit_binary(self, file_name):
-        output_blob = b''
-        for layer_name in self.ncnn_graph.get_graph().keys():
-            is_weight_blob = 1
+    def emit_binary(self, file_name, seq):
+        f = open(file_name, 'w+b')
+        for layer_name in seq:
             for weight in self.ncnn_graph.get_node_attr(layer_name)['binary']:
-                # bitstruct.pack('f32' * len(weight), *weight)
-                output_blob = output_blob + \
-                    np.asarray(weight, dtype=np.float32).tobytes()
-
-        open(file_name, 'w+b').write(output_blob)
+                f.write(np.asarray(weight, dtype=np.float32).tobytes())
+        f.close()
 
 
 class KerasDebugger:
@@ -1645,6 +1675,7 @@ if __name__ == '__main__':
     if args.output_dir != '':
         print('Start emitting to ncnn files.')
         emitter = NcnnEmitter(ncnn_graph)
+        graph_seq = emitter.get_graph_seq()
 
         print('\tEmitting param...')
         emitter.emit_param(
@@ -1652,7 +1683,7 @@ if __name__ == '__main__':
                 args.output_dir,
                 Path(
                     args.input_file).stem +
-                '.param'))
+                '.param'), graph_seq)
 
         print('\tEmitting binary...')
         emitter.emit_binary(
@@ -1660,7 +1691,7 @@ if __name__ == '__main__':
                 args.output_dir,
                 Path(
                     args.input_file).stem +
-                '.bin'))
+                '.bin'), graph_seq)
 
     if args.debug:
         print('Generating ncnn dump helper file...')
