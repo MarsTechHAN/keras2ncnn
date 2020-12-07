@@ -514,6 +514,19 @@ class KerasConverter:
                         bn_params['bn_kernel'], bn_params['bn_bias']]})
 
         if layer['layer']['config']['activation'] in ['softmax', 'sigmoid']:
+            ncnn_graph_attr = ncnn_helper.dump_args(
+                'InnerProduct',
+                num_output=num_output,
+                bias_term=1,
+                weight_data_size=weight_data_size)
+            ncnn_graph_helper.node(
+                layer['layer']['name'],
+                keras_graph_helper.get_node_inbounds(
+                    layer['layer']['name']))
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'InnerProduct', 'param': ncnn_graph_attr, 'binary': [
+                        bn_params['bn_kernel'], bn_params['bn_bias']]})
 
             outbound_layers = []
 
