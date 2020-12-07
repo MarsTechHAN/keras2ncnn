@@ -1,12 +1,13 @@
 # keras2ncnn
 
-### Now availabel on pypy! If you failed to convert a model, welcome to open an issue and attach the h5 file.
+### Now availabel on pypy!
+### If you failed to convert a model, welcome to open an issue and attach the h5 file.
 
 ---
 ## Usage:
 ```
 # Install keras2ncnn (only h5py and numpy is required)
-python3.7 -mpip install --upgrade keras2ncnn
+python3 -mpip install --upgrade keras2ncnn
 
 # If you only want to convert the model
 python3 -m keras2ncnn -i SOME_H5DF_FILE.h5 -o ./  
