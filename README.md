@@ -1,6 +1,6 @@
 # keras2ncnn
 
-### Now availabel on pypy!
+### Now availabel on pypi!
 ### If you failed to convert a model, welcome to open an issue and attach the h5 file.
 
 ---
