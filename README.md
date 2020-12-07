@@ -6,25 +6,21 @@
 ## Usage:
 ```
 # If you only want to convert the model
-python3 keras2ncnn.py -i SOME_H5DF_FILE.h5 -o DIR_TO_SAVE_NCNN_PARAM 
+python3 -m keras2ncnn -i SOME_H5DF_FILE.h5 -o DIR_TO_SAVE_NCNN_PARAM 
 
 # You can see the structure of the converted model and the original model(after optimization)
-python3 keras2ncnn.py -i SOME_H5DF_FILE.h5 -o DIR_TO_SAVE_NCNN_PARAM --plot_graph/-p
-
-# You can see run the resulted C file, and load with --load_debug_load/-l to see the model output comparing to keras implementation
-python3 keras2ncnn.py -i SOME_H5DF_FILE.h5 -o DIR_TO_SAVE_NCNN_PARAM --debug/-d
-# Compile and run SOME_H5DF_FILE.c ans use &> to save the stdout
-python3 keras2ncnn.py -i SOME_H5DF_FILE.h5 -o DIR_TO_SAVE_NCNN_PARAM --load_debug_load/-l SOME_H5DF_FILE_RUN_LOG_FILE
+python3 -m keras2ncnn -i SOME_H5DF_FILE.h5 -o DIR_TO_SAVE_NCNN_PARAM --plot_graph/-p
 ```
 ---
 ## Supported Op
 - InputLayer
-- Conv2D (With none or relu actiovation, with or without biasAdd)
-- Conv2DTranspose (With none or relu actiovation, with or without biasAdd)
+- Conv2D 
+- Conv2DTranspose 
 - DepthwiseConv2D
 - Add
+- Multiply
 - ZeroPadding2D
-- ReLU (No leaky clip relu support)
+- ReLU
 - LeakyReLU
 - UpSampling2D
 - Concatenate
@@ -33,17 +29,6 @@ python3 keras2ncnn.py -i SOME_H5DF_FILE.h5 -o DIR_TO_SAVE_NCNN_PARAM --load_debu
 - AveragePooling2D
 - MaxPooling2D
 - BatchNormalization
-- Dense (With none, linear or softmax activation)
-- Activation (relu only for now)
-
-## Ops that dont work but have done coding
-
-
-## Ops that have done coding but not checked yet
-
-
-## Current status
-- [X] Be able to convert MobilenetV2, load and excute
-- [X] Get all current ops working
-- [ ] Support more ops
+- Dense
+- Activation 
 
