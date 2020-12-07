@@ -529,6 +529,22 @@ class KerasParser:
         ncnn_graph_helper.set_node_attr(
             layer['layer']['name'], {
                 'type': 'Eltwise', 'param': ncnn_graph_attr, 'binary': []})
+    
+    def Multiply_helper(
+            self,
+            layer,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper):
+        ncnn_graph_attr = ncnn_helper.dump_args('Eltwise', op_type=0)
+
+        ncnn_graph_helper.node(
+            layer['layer']['name'],
+            keras_graph_helper.get_node_inbounds(
+                layer['layer']['name']))
+        ncnn_graph_helper.set_node_attr(
+            layer['layer']['name'], {
+                'type': 'Eltwise', 'param': ncnn_graph_attr, 'binary': []})
 
     def Activation_helper(
             self,
@@ -1263,9 +1279,6 @@ class NcnnEmitter:
     def get_graph_seq(self):
 
         graph_head = self.ncnn_graph.get_graph_head()
-        if len(graph_head) > 1:
-            print(graph_head)
-            print("Multi-input graph not supported yet!")
 
         #Thanks to Blckknght for the topological sort alg
         seen = set()
@@ -1273,15 +1286,17 @@ class NcnnEmitter:
         order = []    
         q = [graph_head[0]]
 
-        while q:
-            v = q.pop()
-            if v not in seen:
-                seen.add(v)
-                q.extend(self.ncnn_graph.get_node_outbounds(v))
+        for head in graph_head:
+            q = [head]
+            while q:
+                v = q.pop()
+                if v not in seen:
+                    seen.add(v)
+                    q.extend(self.ncnn_graph.get_node_outbounds(v))
 
-                while stack and v not in self.ncnn_graph.get_node_outbounds(stack[-1]):
-                    order.append(stack.pop())
-                stack.append(v)
+                    while stack and v not in self.ncnn_graph.get_node_outbounds(stack[-1]):
+                        order.append(stack.pop())
+                    stack.append(v)
 
         return stack + order[::-1]
 
