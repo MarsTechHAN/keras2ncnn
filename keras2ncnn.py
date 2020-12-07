@@ -1267,21 +1267,23 @@ class NcnnEmitter:
             print(graph_head)
             print("Multi-input graph not supported yet!")
 
-        queue_name = []
-        visited_name = []
+        #Thanks to Blckknght for the topological sort alg
+        seen = set()
+        stack = []   
+        order = []    
+        q = [graph_head[0]]
 
-        visited_name.append(graph_head[0])
-        queue_name.append(graph_head[0])
+        while q:
+            v = q.pop()
+            if v not in seen:
+                seen.add(v)
+                q.extend(self.ncnn_graph.get_node_outbounds(v))
 
-        while queue_name:
-            s = queue_name.pop(0)
+                while stack and v not in self.ncnn_graph.get_node_outbounds(stack[-1]):
+                    order.append(stack.pop())
+                stack.append(v)
 
-            for neighbour in self.ncnn_graph.get_node_outbounds(s):
-                if neighbour not in visited_name:
-                    visited_name.append(neighbour)
-                    queue_name.append(neighbour)
-
-        return visited_name
+        return stack + order[::-1]
 
     def emit_param(self, file_name, seq):
         ncnn_param_file = open(file_name, 'w+')
@@ -1658,6 +1660,7 @@ if __name__ == '__main__':
     print('Start graph optimizing pass...')
     print('\tRemoving unused nodes...')
     GraphOptimization.removing_unused_nodes(keras_graph)
+    
     print('\tRefreshing graph...')
     keras_graph.refresh()
 
