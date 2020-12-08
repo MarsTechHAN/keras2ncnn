@@ -3,11 +3,6 @@ import numpy as np
 
 class KerasConverter:
     MULTI_OUTPUT_OP = []
-    CONV_ACTIVATION_TYPE = {
-        'linear': 0,
-        'relu': 1,
-        'sigmoid': 4
-    }
 
     def InputLayer_helper(self, layer, keras_graph_helper,
                           ncnn_graph_helper, ncnn_helper):
@@ -32,6 +27,12 @@ class KerasConverter:
     def Conv2D_helper(self, layer, keras_graph_helper,
                       ncnn_graph_helper, ncnn_helper):
 
+        CONV2D_ACTIVATION_TYPE = {
+            'linear': 0,
+            'relu': 1,
+            'sigmoid': 4
+        }
+
         num_output = layer['layer']['config']['filters']
         kernel_w, kernel_h = layer['layer']['config']['kernel_size']
         dilation_w, dilation_h = layer['layer']['config']['dilation_rate']
@@ -55,14 +56,14 @@ class KerasConverter:
             bias_weight = layer['weight']['bias:0']
         else:
             # Reorder weight, h-w-i-o to o-i-h-w
-            weight_data_size = int(layer['weight'].size)
+            weight_data_size = int(layer['weight']['kernel:0'].size)
             # Reorder weight, h-w-i-o to o-i-h-w
-            weight = np.insert(np.transpose(layer['weight'],
+            weight = np.insert(np.transpose(layer['weight']['kernel:0'],
                                             [3, 2, 0, 1]).flatten(), 0, 0)
 
         if 'activation' in layer['layer']['config']:
-            if layer['layer']['config']['activation'] in self.CONV_ACTIVATION_TYPE.keys():
-                activation_type = self.CONV_ACTIVATION_TYPE[layer['layer'][
+            if layer['layer']['config']['activation'] in CONV2D_ACTIVATION_TYPE.keys():
+                activation_type = CONV2D_ACTIVATION_TYPE[layer['layer'][
                     'config']['activation']]
             else:
                 print(layer['layer'])
@@ -102,6 +103,12 @@ class KerasConverter:
     def Conv2DTranspose_helper(self, layer, keras_graph_helper,
                                ncnn_graph_helper, ncnn_helper):
 
+        CONV2D_T_ACTIVATION_TYPE = {
+            'linear': 0,
+            'relu': 1,
+            'sigmoid': 4
+        }
+
         num_output = layer['layer']['config']['filters']
         kernel_w, kernel_h = layer['layer']['config']['kernel_size']
         dilation_w, dilation_h = layer['layer']['config']['dilation_rate']
@@ -125,14 +132,14 @@ class KerasConverter:
             bias_weight = layer['weight']['bias:0']
         else:
             # Reorder weight, h-w-i-o to o-i-h-w
-            weight_data_size = int(layer['weight'].size)
+            weight_data_size = int(layer['weight']['kernel:0'].size)
             # Reorder weight, h-w-i-o to o-i-h-w
-            weight = np.insert(np.transpose(layer['weight'],
+            weight = np.insert(np.transpose(layer['weight']['kernel:0'],
                                             [2, 3, 0, 1]).flatten(), 0, 0)
 
         if 'activation' in layer['layer']['config']:
-            if layer['layer']['config']['activation'] in self.CONV_ACTIVATION_TYPE.keys():
-                activation_type = self.CONV_ACTIVATION_TYPE[layer['layer'][
+            if layer['layer']['config']['activation'] in CONV2D_T_ACTIVATION_TYPE.keys():
+                activation_type = CONV2D_T_ACTIVATION_TYPE[layer['layer'][
                     'config']['activation']]
             else:
                 print(layer['layer'])
@@ -178,12 +185,12 @@ class KerasConverter:
         # Reorder weight, h-w-i-o to o-i-h-w
         weight = np.insert(
             np.transpose(
-                layer['weight'], [
+                layer['weight']['depthwise_kernel:0'], [
                     3, 2, 0, 1]).flatten(), 0, 0)
 
-        num_output = layer['weight'].shape[2] * \
+        num_output = layer['weight']['depthwise_kernel:0'].shape[2] * \
             layer['layer']['config']['depth_multiplier']
-        group = layer['weight'].shape[2]
+        group = layer['weight']['depthwise_kernel:0'].shape[2]
 
         kernel_w, kernel_h = layer['layer']['config']['kernel_size']
 
@@ -201,7 +208,7 @@ class KerasConverter:
         if bias_term:
             raise NotImplementedError
 
-        weight_data_size = int(layer['weight'].size)
+        weight_data_size = int(layer['weight']['depthwise_kernel:0'].size)
 
         ncnn_graph_attr = ncnn_helper.dump_args(
             'ConvolutionDepthWise',
