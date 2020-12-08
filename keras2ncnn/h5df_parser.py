@@ -10,6 +10,14 @@ class H5dfParser:
         self.model_config = json.loads(model_config_raw.decode('utf-8'))
         self.keras_version = self.get_keras_version()
 
+        if self.keras_version != '1':
+            weight_layers = self.f['model_weights']
+        else:
+            weight_layers = self.f
+
+        self.weight_dict = {}
+        weight_layers.visititems(self._get_weight_names)
+
     def get_h5df_file(self):
         return self.f
 
@@ -32,31 +40,24 @@ class H5dfParser:
         else:
             return None
 
+    def _get_weight_names(self, name, obj):
+        for key, val in obj.attrs.items():
+            if key == 'weight_names':
+                weight_names = list(
+                    map(lambda x: x.decode('utf-8'), val.tolist()))
+                if len(weight_names) > 0:
+                    wegith_group = '/'.join(weight_names[0].split('/')[0:-1])
+                    self.weight_dict[name] = obj[wegith_group]
+                    for weight_name in weight_names:
+                        wegith_group = '/'.join(weight_name.split('/')[0:-1])
+                        self.weight_dict[weight_name.split(
+                            '/')[-2]] = obj[wegith_group]
+
     def find_weights_root(self, layer_name):
-        if self.keras_version != '1':
-            weight_layers = self.f['model_weights']
+        if layer_name in self.weight_dict.keys():
+            return self.weight_dict[layer_name]
         else:
-            weight_layers = self.f
-
-        for weight_layer_name in [''] + list(weight_layers.keys()):
-            if weight_layer_name == '':
-                layer = weight_layers
-            else:
-                layer = weight_layers[weight_layer_name]
-
-            while True:
-                if layer_name not in layer:
-                    break
-                layer = layer[layer_name]
-                if (not hasattr(layer, "keys")) or len(layer.keys()) > 1:
-                    return layer
-                layer_keys = list(layer.keys())
-                if len(layer_keys) < 1:
-                    break
-                else:
-                    layer_name = list(layer.keys())[0]
-
-        return None
+            return None
 
     def get_if_sequential(self):
         if self.model_config['class_name'] == 'Sequential':
