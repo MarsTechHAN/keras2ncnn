@@ -52,6 +52,7 @@ class H5dfParser:
                         wegith_group = '/'.join(weight_name.split('/')[0:-1])
                         self.weight_dict[weight_name.split(
                             '/')[-2]] = obj[wegith_group]
+                        self.weight_dict[wegith_group] = obj[wegith_group]
 
     def find_weights_root(self, layer_name):
         if layer_name in self.weight_dict.keys():
@@ -60,7 +61,8 @@ class H5dfParser:
             return None
 
     def get_if_sequential(self):
-        if self.model_config['class_name'] == 'Sequential':
+        if self.model_config['class_name'] == 'Sequential' or \
+            self.model_config['class_name'] == 'Model':
             return True
         else:
             return False
@@ -74,14 +76,6 @@ class H5dfParser:
         return inbound_nodes
 
     def parse_graph(self, graph_helper):
-        if self.get_if_sequential():
-            self.parse_sequential_graph(graph_helper)
-        else:
-            self.parse_model_graph(
-                self.get_model_config()['config']['layers'],
-                graph_helper)
-
-    def parse_sequential_graph(self, graph_helper):
         self.joined_layers = []
         for layers in self.model_config['config']['layers']:
             if layers['class_name'] == 'Model':
