@@ -37,9 +37,8 @@ class NcnnEmitter:
 
         ncnn_param_file.write('%d\n' % self.MAGGGGGIC)
 
-        layer_count = len(self.ncnn_graph.get_graph())
-        blob_count = len(self.ncnn_graph.get_graph()) * 2
-        ncnn_param_file.write('%d %d\n' % (layer_count, blob_count))
+        param_contect = ''
+        blob_count = 0
 
         for layer_name in seq:
             layer_type = self.ncnn_graph.get_node_attr(layer_name)['type']
@@ -65,7 +64,9 @@ class NcnnEmitter:
             else:
                 output_blobs.append('%s_blob' % layer_name)
 
-            ncnn_param_file.write(
+            blob_count += len(output_blobs)
+
+            param_contect += (
                 ('%s' + (
                     25 - len(layer_type)) * ' ' + '%s' + (
                     40 - len(layer_name)) * ' ' + '%d %d %s %s %s\n') % (layer_type,
@@ -75,6 +76,12 @@ class NcnnEmitter:
                                                                          ' '.join(input_blobs),
                                                                          ' '.join(output_blobs),
                                                                          self.ncnn_graph.get_node_attr(layer_name)['param']))
+
+        layer_count = len(self.ncnn_graph.get_graph())
+        ncnn_param_file.write('%d %d\n' % (layer_count, blob_count))
+        ncnn_param_file.write(param_contect)
+
+        ncnn_param_file.close()
 
     def emit_binary(self, file_name, seq):
         f = open(file_name, 'w+b')
