@@ -42,9 +42,9 @@ class KerasDebugger:
         'Dense']
 
     input_extractor_template = 'ex.input("$layer_name$_blob", in);'
-    output_extractor_template = '    ncnn::Mat $layer_name$; '\
-                                'ex.extract("$layer_name$_blob", $layer_name$); '\
-                                'dump_mat($layer_name$, "$layer_name$");'
+    output_extractor_template = '    ncnn::Mat $layer_name_rep$; '\
+                                'ex.extract("$layer_name$_blob", $layer_name_rep$); '\
+                                'dump_mat($layer_name_rep$, "$layer_name$");'
 
     def dump2c(self, file_name, ncnn_graph):
         import gzip  # pylint: disable=import-outside-toplevel
@@ -53,6 +53,8 @@ class KerasDebugger:
             binascii.unhexlify(
                 self.payload)).decode('utf-8')
 
+        def replace_bs(x): return x.replace('/', '_')
+
         extractor_list = []
 
         for layer_name in ncnn_graph.get_graph().keys():
@@ -60,12 +62,18 @@ class KerasDebugger:
             if layer_type == 'Input':
                 extractor_list.append(
                     self.input_extractor_template.replace(
-                        '$layer_name$', layer_name))
+                        '$layer_name$',
+                        layer_name).replace(
+                        '$layer_name_rep$',
+                        replace_bs(layer_name)))
 
             if layer_type in self.target_operators:
                 extractor_list.append(
                     self.output_extractor_template.replace(
-                        '$layer_name$', layer_name))
+                        '$layer_name$',
+                        layer_name).replace(
+                        '$layer_name_rep$',
+                        replace_bs(layer_name)))
 
         c_payload = c_payload.replace('$FILENAME$', file_name)
         c_payload = c_payload.replace('$INPUT_W$', '224')
