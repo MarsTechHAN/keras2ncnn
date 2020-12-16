@@ -98,10 +98,13 @@ def main():
         print('Running accuracy matcher...')
         debugger = KerasDebugger()
 
+        print('\tIniting Env...')
+        debugger.init_env()
+
         emitter = NcnnEmitter(ncnn_graph)
         graph_seq = emitter.get_graph_seq()
 
-        print('\tEmitting param...')
+        print('\tPreparing File...')
         emitter.emit_param(
             os.path.join(
                 debugger.tmp_dir,
@@ -109,7 +112,6 @@ def main():
                     args.input_file).stem +
                 '.param'), graph_seq)
 
-        print('\tEmitting binary...')
         emitter.emit_binary(
             os.path.join(
                 debugger.tmp_dir,
@@ -117,8 +119,7 @@ def main():
                     args.input_file).stem +
                 '.bin'), graph_seq)
 
-        print('\tIniting Env...')
-        debugger.init_env()
+
 
         print('\tGenerting File...')
         debugger.emit_file(Path(args.input_file).stem, ncnn_graph, keras_graph)
