@@ -520,7 +520,7 @@ class KerasConverter:
                     'type': 'InnerProduct', 'param': ncnn_graph_attr, 'binary': [
                         bn_params['bn_kernel'], bn_params['bn_bias']]})
 
-        if layer['layer']['config']['activation'] in ['softmax', 'sigmoid']:
+        if layer['layer']['config']['activation'] == 'softmax':
             ncnn_graph_attr = ncnn_helper.dump_args(
                 'InnerProduct',
                 num_output=num_output,
