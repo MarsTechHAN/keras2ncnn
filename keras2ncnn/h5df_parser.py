@@ -62,17 +62,25 @@ class H5dfParser:
 
     def get_if_sequential(self):
         if self.model_config['class_name'] == 'Sequential' or \
-            self.model_config['class_name'] == 'Model':
+                self.model_config['class_name'] == 'Model':
             return True
         else:
             return False
 
     def join_inbound_nodes(self, layer):
         inbound_nodes = []
+
+        def get_inbound_nodes(inbound_list, inbound_nodes):
+            for entry in inbound_list:
+                if isinstance(entry, list):
+                    get_inbound_nodes(entry, inbound_nodes)
+                else:
+                    if isinstance(entry, str):
+                        inbound_nodes.append(entry)
+
         if 'inbound_nodes' in layer.keys():
-            if len(layer['inbound_nodes']) > 0:
-                for inbound in layer['inbound_nodes'][0]:
-                    inbound_nodes.append(inbound[0])
+            get_inbound_nodes(layer['inbound_nodes'], inbound_nodes)
+
         return inbound_nodes
 
     def parse_graph(self, graph_helper):
@@ -82,10 +90,13 @@ class H5dfParser:
                 self.parse_model_graph(
                     layers['config']['layers'], graph_helper)
             else:
-                tails = graph_helper.get_graph_tail()
+                inbound_nodes = self.join_inbound_nodes(layers)
+                if len(inbound_nodes) == 0:
+                    inbound_nodes = graph_helper.get_graph_tail()
+
                 layers['name'] = layers['config']['name']
 
-                graph_helper.node(layers['config']['name'], tails)
+                graph_helper.node(layers['config']['name'], inbound_nodes)
                 graph_helper.set_node_attr(
                     layers['config']['name'], {
                         'layer': layers, 'weight': self.find_weights_root(
