@@ -42,21 +42,8 @@ def main():
         '-d',
         '--debug',
         action='store_true',
-        help='Output debug C file.')
+        help='Run accuracy debug.')
 
-    parser.add_argument(
-        '-l',
-        '--load_debug_log',
-        type=str,
-        default='',
-        help='Load debug log for comparing.')
-
-    parser.add_argument(
-        '-m',
-        '--input_image',
-        type=str,
-        default='',
-        help='Input image for comparing')
     args = parser.parse_args()
 
     # Create a source graph and a dest graph
@@ -108,11 +95,38 @@ def main():
                 '.bin'), graph_seq)
 
     if args.debug:
-        print('Generating ncnn dump helper file...')
-        KerasDebugger().dump2c(Path(args.input_file).stem, ncnn_graph)
+        print('Running accuracy matcher...')
+        debugger = KerasDebugger()
 
-    if args.load_debug_log != '':
-        print('Start loading debug log...')
-        KerasDebugger().decode(args.input_file, args.load_debug_log)
+        emitter = NcnnEmitter(ncnn_graph)
+        graph_seq = emitter.get_graph_seq()
+
+        print('\tEmitting param...')
+        emitter.emit_param(
+            os.path.join(
+                debugger.tmp_dir,
+                Path(
+                    args.input_file).stem +
+                '.param'), graph_seq)
+
+        print('\tEmitting binary...')
+        emitter.emit_binary(
+            os.path.join(
+                debugger.tmp_dir,
+                Path(
+                    args.input_file).stem +
+                '.bin'), graph_seq)
+
+        print('\tIniting Env...')
+        debugger.init_env()
+
+        print('\tGenerting File...')
+        debugger.emit_file(Path(args.input_file).stem, ncnn_graph, keras_graph)
+
+        print('\tCompiling...')
+        debugger.run_debug()
+
+        print('\tRunning Keras Model...')
+        debugger.decode(args.input_file, keras_graph)
 
     print('Done!')
