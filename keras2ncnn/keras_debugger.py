@@ -7,9 +7,10 @@ import sys
 
 import virtualenv
 
+
 class KerasDebugger:
     ncnn_prog_template = \
-'''
+        '''
 #include "net.h"
 
 #include <algorithm>
@@ -44,9 +45,9 @@ static int dump_mat(const ncnn::Mat& m, const char *m_name)
         const float* ptr = m.channel(q);
         fwrite(ptr, sizeof(float), m.w * m.h, fp);
     }
-    
+
     fclose(fp);
-    
+
     return 0;
 }
 
@@ -65,7 +66,7 @@ $INSERT$
 }
 
 int main(int argc, char** argv)
-{   
+{
     detect_ncnn_net();
 
     return 0;
@@ -73,25 +74,25 @@ int main(int argc, char** argv)
 
 '''
 
-    input_extractor_template =  '\tncnn::Mat $layer_name_rep$_blob;\n'\
-                                '\t$layer_name_rep$_blob.create($input_shape$, 4u);\n'\
-                                '\trand_mat($layer_name_rep$_blob);\n'\
-                                '\tex.input("$layer_name$_blob", $layer_name_rep$_blob);\n\n'
+    input_extractor_template = '\tncnn::Mat $layer_name_rep$_blob;\n'\
+        '\t$layer_name_rep$_blob.create($input_shape$, 4u);\n'\
+        '\trand_mat($layer_name_rep$_blob);\n'\
+        '\tex.input("$layer_name$_blob", $layer_name_rep$_blob);\n\n'
 
     output_extractor_template = '\tncnn::Mat $layer_name_rep$;\n'\
                                 '\tex.extract("$layer_name$_blob", $layer_name_rep$);\n'\
                                 '\tdump_mat($layer_name_rep$, "$layer_name$");\n\n'
 
-    venv_dir = os.path.join('.keras2ncnn_build')
+    tmp_dir = os.path.join('.keras2ncnn_build')
 
     def init_env(self):
         if 'win32' in sys.platform:
             print('\tThe debugger currently does not support Win32.')
             return -1
 
-        if not os.path.exists(os.path.join(self.venv_dir, '.stamp_env_init')):
+        if not os.path.exists(os.path.join(self.tmp_dir, '.stamp_env_init')):
 
-            #Test for compiler
+            # Test for compiler
             required_utils = [
                 'gcc',
                 'g++',
@@ -101,15 +102,19 @@ int main(int argc, char** argv)
 
             for util in required_utils:
                 res = sp.find_executable(util)
-                if res == None:
-                    print('\t%s is not inside PATH, please install it first.' % res)
+                if res is None:
+                    print(
+                        '\t%s is not inside PATH, please install it first.' %
+                        res)
                     return -1
 
-            #Setup virtualenv
-            virtualenv.create_environment(self.venv_dir)
+            # Setup virtualenv
+            virtualenv.create_environment(self.tmp_dir)
 
-            activator_filename = os.path.join(self.venv_dir, 'bin', 'activate_this.py')
-            exec(open(activator_filename).read(), {'__file__': activator_filename})
+            activator_filename = os.path.join(
+                self.tmp_dir, 'bin', 'activate_this.py')
+            exec(open(activator_filename).read(),
+                 {'__file__': activator_filename})
 
             install_pkg_list = [
                 'numpy',
@@ -118,32 +123,48 @@ int main(int argc, char** argv)
                 'scipy'
             ]
 
-            #Install packages
-            subprocess.run([os.path.join(self.venv_dir, 'bin', 'pip3'), 'install', '--upgrade', 'pip'])
-            subprocess.run([os.path.join(self.venv_dir, 'bin', 'pip3'), 'install'] + install_pkg_list)
+            # Install packages
+            subprocess.run(
+                [os.path.join(self.tmp_dir, 'bin', 'pip3'), 'install', '--upgrade', 'pip'])
+            subprocess.run(
+                [os.path.join(self.tmp_dir, 'bin', 'pip3'), 'install'] + install_pkg_list)
 
-            #Pull ncnn
-            subprocess.run(['git', 'clone', 
-                'https://github.com/Tencent/ncnn.git', os.path.join(self.venv_dir, 'ncnn')])
-            
-            #setup build
-            os.mkdir(os.path.join(self.venv_dir, 'ncnn', 'build'))
+            # Pull ncnn
+            subprocess.run(['git',
+                            'clone',
+                            'https://github.com/Tencent/ncnn.git',
+                            os.path.join(self.tmp_dir,
+                                         'ncnn')])
 
-            open(os.path.join(self.venv_dir, 'ncnn', 'benchmark', 'CMakeLists.txt'), 'a').write(
-                'add_executable(keras2ncnn keras2ncnn.cpp)\n' + \
-                'target_link_libraries(keras2ncnn PRIVATE ncnn)'
-            )
+            # setup build
+            os.mkdir(os.path.join(self.tmp_dir, 'ncnn', 'build'))
 
-            open(os.path.join(self.venv_dir, '.stamp_env_init'), 'w+').write('Rua!')
+            open(
+                os.path.join(
+                    self.tmp_dir,
+                    'ncnn',
+                    'benchmark',
+                    'CMakeLists.txt'),
+                'a').write(
+                'add_executable(keras2ncnn keras2ncnn.cpp)\n' +
+                'target_link_libraries(keras2ncnn PRIVATE ncnn)')
+
+            open(
+                os.path.join(
+                    self.tmp_dir,
+                    '.stamp_env_init'),
+                'w+').write('Rua!')
 
         else:
-            activator_filename = os.path.join(self.venv_dir, 'bin', 'activate_this.py')
-            exec(open(activator_filename).read(), {'__file__': activator_filename})
+            activator_filename = os.path.join(
+                self.tmp_dir, 'bin', 'activate_this.py')
+            exec(open(activator_filename).read(),
+                 {'__file__': activator_filename})
 
         return 0
 
     def emit_file(self, file_name, ncnn_graph, keras_graph):
-        
+
         def replace_bs(x): return x.replace('/', '_')
 
         extractor_list = []
@@ -153,7 +174,8 @@ int main(int argc, char** argv)
         for layer_name in ncnn_graph.get_graph().keys():
             layer_type = ncnn_graph.get_node_attr(layer_name)['type']
             if layer_type == 'Input':
-                op_shape = keras_graph.get_node_attr(layer_name)['layer']['config']['batch_input_shape'][1:]
+                op_shape = keras_graph.get_node_attr(
+                    layer_name)['layer']['config']['batch_input_shape'][1:]
                 if None in op_shape:
                     print('Input has undetermind shape in W/H/C, default to 224,224,3')
                     op_shape = [3, 224, 224]
@@ -166,7 +188,7 @@ int main(int argc, char** argv)
                         replace_bs(layer_name)).replace(
                         '$input_shape$',
                         ', '.join(list(map(str, op_shape)))
-                        ))
+                    ))
 
             extractor_list.append(
                 self.output_extractor_template.replace(
@@ -178,30 +200,77 @@ int main(int argc, char** argv)
         c_payload = c_payload.replace('$FILENAME$', file_name)
         c_payload = c_payload.replace('$INSERT$', '\n'.join(extractor_list))
 
-        open(os.path.join(self.venv_dir, 'ncnn', 'benchmark', 'keras2ncnn.cpp'), 'w+').write(c_payload)
-        
+        open(
+            os.path.join(
+                self.tmp_dir,
+                'ncnn',
+                'benchmark',
+                'keras2ncnn.cpp'),
+            'w+').write(c_payload)
+
         try:
-            os.mkdir(os.path.join(self.venv_dir, 'ncnn', 'build', 'benchmark'))
-        except:
+            os.mkdir(os.path.join(self.tmp_dir, 'ncnn', 'build', 'benchmark'))
+        except BaseException:
             pass
 
-        shutil.copy(file_name+'.param', os.path.join(self.venv_dir, 'ncnn', 'build', 'benchmark'))
-        shutil.copy(file_name+'.bin', os.path.join(self.venv_dir, 'ncnn', 'build', 'benchmark'))
+        shutil.copy(
+            os.path.join(
+                self.tmp_dir,
+            file_name + '.param'),
+            os.path.join(
+                self.tmp_dir,
+                'ncnn',
+                'build',
+                'benchmark'))
+        shutil.copy(
+            os.path.join(
+                self.tmp_dir,
+            file_name + '.bin'),
+            os.path.join(
+                self.tmp_dir,
+                'ncnn',
+                'build',
+                'benchmark'))
 
     def run_debug(self):
-        for f in glob.glob(os.path.join(self.venv_dir, 'ncnn', 'build', 'benchmark', '*.dat')):
+        for f in glob.glob(
+            os.path.join(
+                self.tmp_dir,
+                'ncnn',
+                'build',
+                'benchmark',
+                '*.dat')):
             try:
                 os.remove(f)
-            except:
+            except BaseException:
                 pass
-        
+
         try:
-            os.remove(os.path.join(self.venv_dir, 'ncnn', 'build', 'benchmark', 'keras2ncnn'))
-        except:
+            os.remove(
+                os.path.join(
+                    self.tmp_dir,
+                    'ncnn',
+                    'build',
+                    'benchmark',
+                    'keras2ncnn'))
+        except BaseException:
             pass
-        
-        subprocess.run('cd %s; cmake -DNCNN_BENCHMARK=ON ..; cd benchmark; make -j4' % os.path.join(self.venv_dir, 'ncnn', 'build'), shell=True)
-        subprocess.run('cd %s; chmod +x keras2ncnn; ./keras2ncnn' % (os.path.join(self.venv_dir, 'ncnn', 'build', 'benchmark')), shell=True)
+
+        subprocess.run(
+            'cd %s; cmake -DNCNN_BENCHMARK=ON ..; cd benchmark; make -j4' %
+            os.path.join(
+                self.tmp_dir,
+                'ncnn',
+                'build'),
+            shell=True)
+        subprocess.run(
+            'cd %s; chmod +x keras2ncnn; ./keras2ncnn' %
+            (os.path.join(
+                self.tmp_dir,
+                'ncnn',
+                'build',
+                'benchmark')),
+            shell=True)
 
     def decode(self, h5_file, keras_graph):
         import numpy as np  # pylint: disable=import-outside-toplevel
@@ -215,67 +284,89 @@ int main(int argc, char** argv)
         from scipy.spatial import distance  # pylint: disable=import-outside-toplevel
 
         # Read results from ncnn log file
-        strip_filename = lambda x: (os.path.split(x)[-1])
-        is_log_file = lambda x: '.dat' in x 
-        
+        def strip_filename(x): return (os.path.split(x)[-1])
+        def is_log_file(x): return '.dat' in x
+
         ncnn_det_out = {}
- 
-        log_files = filter(is_log_file, os.listdir(os.path.join(self.venv_dir, 'ncnn', 'build', 'benchmark')))
+
+        log_files = filter(
+            is_log_file,
+            os.listdir(
+                os.path.join(
+                    self.tmp_dir,
+                    'ncnn',
+                    'build',
+                    'benchmark')))
         for mat_file in log_files:
             mat_sp = strip_filename(mat_file).split('-')
-            ncnn_det_out[mat_sp[0]] = np.fromfile(os.path.join(self.venv_dir, 'ncnn', 'build', 'benchmark', mat_file), 
-                dtype='float32').reshape(*list(map(int, mat_sp[1:4])))
+            ncnn_det_out[mat_sp[0]] = np.fromfile(os.path.join(self.tmp_dir, 'ncnn', 'build', 'benchmark', mat_file),
+                                                  dtype='float32').reshape(*list(map(int, mat_sp[1:4])))
 
-        input_images = []
         
-        for layer_name in keras_graph.get_graph().keys():
-            try:
-                layer_type = keras_graph.get_node_attr(layer_name)['layer']['class_name']
-            except:
-                continue
-            if layer_type == 'InputLayer':
-                input_images.append(ncnn_det_out[layer_name].transpose(1, 2, 0)[np.newaxis, ...])
 
         # Inference using keras
         model = keras.models.load_model(h5_file)
-        
-        output_node_names = []
-        output_nodes = []
+
+        output_node_names = [[], ]
+        output_nodes = [[], ]
+        input_images = []
+        inputs = [model.inputs]
+
         for layer_idx in range(len(model.layers)):
-        
+
             if 'Model' in str(type(model.layers[layer_idx])):
+                output_node_names.append([])
+                output_nodes.append([])
+                # input_images.append([])
+                inputs.append(model.layers[layer_idx].inputs)
+
                 i = 0
-                while 1:
+                while True:
                     try:
-                        layer = model.layers[layer_idx].get_layer(index = i)
+                        layer = model.layers[layer_idx].get_layer(index=i)
                         node_name = layer.name
                         if node_name in ncnn_det_out.keys():
-                            if keras_graph.get_node_attr(node_name)['layer']['class_name'] == 'InputLayer':
-                                pass
-                            else:   
-                                output_node_names.append(node_name)
-                                output_nodes.append(layer.output)  
+                            if keras_graph.get_node_attr(
+                                    node_name)['layer']['class_name'] == 'InputLayer':
+                                input_images.append(
+                                    ncnn_det_out[node_name].transpose(
+                                        1, 2, 0)[
+                                        np.newaxis, ...])
+                            else:
+                                output_node_names[-1].append(node_name)
+                                output_nodes[-1].append(layer.output)
 
                         i = i + 1
-                    except:
+                    except BaseException:
                         break
-                    
+
             else:
                 node_name = model.layers[layer_idx].name
                 if node_name in ncnn_det_out.keys():
-                    if keras_graph.get_node_attr(node_name)['layer']['class_name'] == 'InputLayer':
-                        pass
-                    else:   
-                        output_node_names.append(node_name)
-                        output_nodes.append(model.layers[layer_idx].output)  
-        
-        functor = K.function(model.inputs, output_nodes)
-        layer_outs = functor(input_images + [1.])
+                    if keras_graph.get_node_attr(
+                            node_name)['layer']['class_name'] == 'InputLayer':
+                        input_images.append(
+                            ncnn_det_out[node_name].transpose(
+                                1, 2, 0)[
+                                np.newaxis, ...])
+                    else:
+                        output_node_names[0].append(node_name)
+                        output_nodes[0].append(model.layers[layer_idx].output)
 
-        keras_layer_dumps = dict(zip(output_node_names, layer_outs))
+        keras_layer_dumps_list = []
+
+        for func_idx in range(len(output_node_names)):
+
+            functor = K.function(inputs[func_idx], output_nodes[func_idx])
+            layer_outs = functor(input_images + [1,])
+            keras_layer_dumps_list.append(dict(zip(output_node_names[func_idx], layer_outs)))
+
+        keras_layer_dumps = {k: v for d in keras_layer_dumps_list for k, v in d.items()}
+
+        output_node_names = [j for i in output_node_names for j in i]
 
         for output_node_name in output_node_names:
-
+            print(output_node_name, )
             print('==================================')
 
             print(
@@ -346,7 +437,7 @@ int main(int argc, char** argv)
                     ncnn_index = ncnn_det_out[output_node_name][0, 0].argsort(
                     )[-5:][::-1]
                     ncnn_top_value = ncnn_det_out[output_node_name][0,
-                                                                       0][ncnn_index]
+                                                                    0][ncnn_index]
                     ncnn_topk = dict(zip(ncnn_index, ncnn_top_value))
 
                 if os.path.exists('./ImageNetLabels.txt'):
