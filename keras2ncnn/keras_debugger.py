@@ -216,7 +216,7 @@ int main(int argc, char** argv)
         shutil.copy(
             os.path.join(
                 self.tmp_dir,
-            file_name + '.param'),
+                file_name + '.param'),
             os.path.join(
                 self.tmp_dir,
                 'ncnn',
@@ -225,7 +225,7 @@ int main(int argc, char** argv)
         shutil.copy(
             os.path.join(
                 self.tmp_dir,
-            file_name + '.bin'),
+                file_name + '.bin'),
             os.path.join(
                 self.tmp_dir,
                 'ncnn',
@@ -272,7 +272,7 @@ int main(int argc, char** argv)
                 'benchmark')),
             shell=True)
 
-    def decode(self, h5_file, keras_graph):
+    def decode(self, h5_file, keras_graph, graph_seq):
         import numpy as np  # pylint: disable=import-outside-toplevel
         from tensorflow.python import keras  # pylint: disable=import-outside-toplevel
         from tensorflow.python.keras import backend as K  # pylint: disable=import-outside-toplevel
@@ -301,8 +301,6 @@ int main(int argc, char** argv)
             mat_sp = strip_filename(mat_file).split('-')
             ncnn_det_out[mat_sp[0]] = np.fromfile(os.path.join(self.tmp_dir, 'ncnn', 'build', 'benchmark', mat_file),
                                                   dtype='float32').reshape(*list(map(int, mat_sp[1:4])))
-
-        
 
         # Inference using keras
         model = keras.models.load_model(h5_file)
@@ -358,15 +356,19 @@ int main(int argc, char** argv)
         for func_idx in range(len(output_node_names)):
 
             functor = K.function(inputs[func_idx], output_nodes[func_idx])
-            layer_outs = functor(input_images + [1,])
-            keras_layer_dumps_list.append(dict(zip(output_node_names[func_idx], layer_outs)))
+            layer_outs = functor(input_images + [1, ])
+            keras_layer_dumps_list.append(
+                dict(zip(output_node_names[func_idx], layer_outs)))
 
-        keras_layer_dumps = {k: v for d in keras_layer_dumps_list for k, v in d.items()}
+        keras_layer_dumps = {
+            k: v for d in keras_layer_dumps_list for k,
+            v in d.items()}
 
         output_node_names = [j for i in output_node_names for j in i]
-
-        for output_node_name in output_node_names:
-            print(output_node_name, )
+        for output_node_name in graph_seq:
+            if output_node_name not in output_node_names:
+                print(output_node_name)
+                continue
             print('==================================')
 
             print(
@@ -388,7 +390,7 @@ int main(int argc, char** argv)
                  ncnn_det_out[output_node_name].flatten().std()))
 
             if keras_layer_dumps[output_node_name][0].ndim == 3:
-                if keras_layer_dumps[output_node_name].size !=  ncnn_det_out[output_node_name].size:
+                if keras_layer_dumps[output_node_name].size != ncnn_det_out[output_node_name].size:
                     print('Size not matched, not able to calculate similarity.')
                 else:
                     print(
@@ -403,7 +405,7 @@ int main(int argc, char** argv)
                     ncnn_det_out[output_node_name][0, 0:10, 0], suppress_small=True, precision=3))
 
             elif keras_layer_dumps[output_node_name][0].ndim == 2:
-                if keras_layer_dumps[output_node_name].size !=  ncnn_det_out[output_node_name].size:
+                if keras_layer_dumps[output_node_name].size != ncnn_det_out[output_node_name].size:
                     print('Size not matched, not able to calculate similarity.')
                 else:
                     print(
