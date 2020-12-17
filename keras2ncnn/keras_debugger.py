@@ -388,11 +388,14 @@ int main(int argc, char** argv)
                  ncnn_det_out[output_node_name].flatten().std()))
 
             if keras_layer_dumps[output_node_name][0].ndim == 3:
-                print(
-                    'Cosine Similarity: %.05f' %
-                    distance.cosine(
-                        keras_layer_dumps[output_node_name][0].transpose(
-                            (2, 0, 1)).flatten(), ncnn_det_out[output_node_name].flatten()))
+                if keras_layer_dumps[output_node_name].size !=  ncnn_det_out[output_node_name].size:
+                    print('Size not matched, not able to calculate similarity.')
+                else:
+                    print(
+                        'Cosine Similarity: %.05f' %
+                        distance.cosine(
+                            keras_layer_dumps[output_node_name][0].transpose(
+                                (2, 0, 1)).flatten(), ncnn_det_out[output_node_name].flatten()))
 
                 print('Keras Feature Map: \t%s' % np.array2string(
                     keras_layer_dumps[output_node_name][0][0:10, 0, 0], suppress_small=True, precision=3))
@@ -400,11 +403,14 @@ int main(int argc, char** argv)
                     ncnn_det_out[output_node_name][0, 0:10, 0], suppress_small=True, precision=3))
 
             elif keras_layer_dumps[output_node_name][0].ndim == 2:
-                print(
-                    'Cosine Similarity: %.05f' %
-                    distance.cosine(
-                        keras_layer_dumps[output_node_name][0].transpose(
-                            (1, 0)).flatten(), ncnn_det_out[output_node_name].flatten()))
+                if keras_layer_dumps[output_node_name].size !=  ncnn_det_out[output_node_name].size:
+                    print('Size not matched, not able to calculate similarity.')
+                else:
+                    print(
+                        'Cosine Similarity: %.05f' %
+                        distance.cosine(
+                            keras_layer_dumps[output_node_name][0].transpose(
+                                (1, 0)).flatten(), ncnn_det_out[output_node_name].flatten()))
 
                 print('Keras Feature Map: \t%s' % np.array2string(
                     keras_layer_dumps[output_node_name][0][0:10, 0], suppress_small=True, precision=3))
