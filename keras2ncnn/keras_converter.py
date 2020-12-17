@@ -1,4 +1,6 @@
+import inspect
 import numpy as np
+import sys
 
 
 class KerasConverter:
@@ -43,7 +45,10 @@ class KerasConverter:
         elif layer['layer']['config']['padding'] == 'same':
             pad_left = -233
         else:
-            raise NotImplementedError
+            print('[ERROR] Explicit padding is not supported yet.')
+            frameinfo = inspect.getframeinfo(inspect.currentframe())
+            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            sys.exit(-1)
 
         bias_term = layer['layer']['config']['use_bias']
         if bias_term:
@@ -66,8 +71,10 @@ class KerasConverter:
                 activation_type = CONV2D_ACTIVATION_TYPE[layer['layer'][
                     'config']['activation']]
             else:
-                print(layer['layer'])
-                raise NotImplementedError
+                print('[ERROR] Activation type %s is is not supported yet.' % layer['layer']['config']['activation'])
+                frameinfo = inspect.getframeinfo(inspect.currentframe())
+                print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                sys.exit(-1)
         else:
             activation_type = 0
 
@@ -119,7 +126,10 @@ class KerasConverter:
         elif layer['layer']['config']['padding'] == 'same':
             pad_left = -233
         else:
-            raise NotImplementedError
+            print('[ERROR] Explicit padding is not supported yet.')
+            frameinfo = inspect.getframeinfo(inspect.currentframe())
+            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            sys.exit(-1)
 
         bias_term = layer['layer']['config']['use_bias']
         if bias_term:
@@ -142,8 +152,10 @@ class KerasConverter:
                 activation_type = CONV2D_T_ACTIVATION_TYPE[layer['layer'][
                     'config']['activation']]
             else:
-                print(layer['layer'])
-                raise NotImplementedError
+                print('[ERROR] Activation type %s is is not supported yet.' % layer['layer']['config']['activation'])
+                frameinfo = inspect.getframeinfo(inspect.currentframe())
+                print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                sys.exit(-1)
         else:
             activation_type = 0
 
@@ -203,10 +215,17 @@ class KerasConverter:
         elif layer['layer']['config']['padding'] == 'same':
             pad_left = -233
         else:
-            raise NotImplementedError
+            print('[ERROR] Explicit padding is not supported yet.')
+            frameinfo = inspect.getframeinfo(inspect.currentframe())
+            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            sys.exit(-1)
+
         bias_term = layer['layer']['config']['use_bias']
         if bias_term:
-            raise NotImplementedError
+            print('[ERROR] Depthwise Conv2D with bias is not supported yet.')
+            frameinfo = inspect.getframeinfo(inspect.currentframe())
+            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            sys.exit(-1)
 
         weight_data_size = int(layer['weight']['depthwise_kernel:0'].size)
 
@@ -310,11 +329,13 @@ class KerasConverter:
             ncnn_graph_helper,
             ncnn_helper):
 
-        SUPPORTED_ACTIVATION = ['relu', 'sigmoid']
+        SUPPORTED_ACTIVATION = ['relu', 'sigmoid', 'softmax']
 
         if layer['layer']['config']['activation'] not in SUPPORTED_ACTIVATION:
-            print(layer['layer'])
-            raise NotImplementedError
+            print('[ERROR] Activation type %s is is not supported yet.' % layer['layer']['config']['activation'])
+            frameinfo = inspect.getframeinfo(inspect.currentframe())
+            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            sys.exit(-1)
 
         if layer['layer']['config']['activation'] == 'relu':
             if 'alpha' in layer['layer']['config'].keys():
@@ -367,6 +388,17 @@ class KerasConverter:
             ncnn_graph_helper.set_node_attr(
                 layer['layer']['name'], {
                     'type': 'Sigmoid', 'param': ncnn_graph_attr, 'binary': []})
+        
+        if layer['layer']['config']['activation'] == 'softmax':
+            ncnn_graph_attr = ncnn_helper.dump_args(
+                'Softmax')
+            ncnn_graph_helper.node(
+                layer['layer']['name'],
+                keras_graph_helper.get_node_inbounds(
+                    layer['layer']['name']))
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'Softmax', 'param': ncnn_graph_attr, 'binary': []})
 
     def Flatten_helper(
             self,
@@ -419,8 +451,17 @@ class KerasConverter:
             ncnn_graph_helper,
             ncnn_helper):
 
-        if layer['layer']['config']['threshold'] != 0:
-            raise NotImplementedError
+        if 'threshold' in layer['layer']['config'].keys():
+            if layer['layer']['config']['threshold'] != 0:
+                print('[ERROR] Leaky Clip ReLU is supported by ncnn.')
+                frameinfo = inspect.getframeinfo(inspect.currentframe())
+                print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                sys.exit(-1)
+
+        if 'negative_slope' in layer['layer']['config'].keys():
+            negative_slope = layer['layer']['config']['negative_slope']
+        else:
+            negative_slope = 0.0
 
         if 'max_value' in layer['layer']['config'].keys():
             ncnn_graph_attr = ncnn_helper.dump_args(
@@ -438,7 +479,7 @@ class KerasConverter:
                     'output_blobs': layer['layer']['name'] + '_Clip_blob'})
 
             ncnn_graph_attr = ncnn_helper.dump_args(
-                'ReLU', slope=layer['layer']['config']['negative_slope'])
+                'ReLU', slope=negative_slope)
             ncnn_graph_helper.node(
                 layer['layer']['name'], [
                     layer['layer']['name'] + '_Clip', ])
@@ -447,7 +488,7 @@ class KerasConverter:
                     'type': 'ReLU', 'param': ncnn_graph_attr, 'binary': []})
         else:
             ncnn_graph_attr = ncnn_helper.dump_args(
-                'ReLU', slope=layer['layer']['config']['negative_slope'])
+                'ReLU', slope=negative_slope)
             ncnn_graph_helper.node(
                 layer['layer']['name'],
                 keras_graph_helper.get_node_inbounds(
@@ -488,9 +529,10 @@ class KerasConverter:
 
         if layer['layer']['config']['activation'] not in SUPPORTED_ACTIVATION and \
                 layer['layer']['config']['activation'] not in SUPPORTED_FUSED_ACTIVATION_TYPE:
-
-            print(layer)
-            raise NotImplementedError
+            print('[ERROR] Activation type %s is is not supported yet.' % layer['layer']['config']['activation'])
+            frameinfo = inspect.getframeinfo(inspect.currentframe())
+            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            sys.exit(-1)
 
         num_output = layer['weight']['kernel:0'].shape[1]
 
@@ -575,15 +617,6 @@ class KerasConverter:
                     'type': 'InnerProduct', 'param': ncnn_graph_attr, 'binary': [
                         bn_params['bn_kernel'], bn_params['bn_bias']]})
 
-    def Permute_helper(
-            self,
-            layer,
-            keras_graph_helper,
-            ncnn_graph_helper,
-            ncnn_helper):
-        print(layer)
-        raise NotImplementedError
-
     def Concatenate_helper(
             self,
             layer,
@@ -594,7 +627,10 @@ class KerasConverter:
         DIM_SEQ = [3, 2, 0, 1]
 
         if DIM_SEQ[layer['layer']['config']['axis']] == 0:
-            raise NotImplementedError
+            print('[ERROR] Concat asix = 0 is not support. ncnn only have C/H/W Dim.')
+            frameinfo = inspect.getframeinfo(inspect.currentframe())
+            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            sys.exit(-1)
 
         ncnn_graph_attr = ncnn_helper.dump_args(
             'Concat', axis=DIM_SEQ[layer['layer']['config']['axis']] - 1)
@@ -631,15 +667,6 @@ class KerasConverter:
         ncnn_graph_helper.set_node_attr(
             layer['layer']['name'], {
                 'type': 'Interp', 'param': ncnn_graph_attr, 'binary': []})
-
-    def Dropout_helper(
-            self,
-            layer,
-            keras_graph_helper,
-            ncnn_graph_helper,
-            ncnn_helper):
-        print(layer)
-        raise NotImplementedError
 
     def GlobalAveragePooling2D_helper(
             self,
@@ -693,8 +720,13 @@ class KerasConverter:
                     ncnn_graph_attr = ncnn_helper.dump_args(
                         'Reshape', w=target_shape[1])
                 else:
-                    print(layer)
-                    raise NotImplementedError
+                    if(len(target_shape) == 1):
+                        return
+                    else:
+                        print('[ERROR] Reshape Layer Dim %d is not supported.' % len(target_shape))
+                        frameinfo = inspect.getframeinfo(inspect.currentframe())
+                        print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                        sys.exit(-1)
 
         ncnn_graph_helper.node(
             layer['layer']['name'],
@@ -717,8 +749,13 @@ class KerasConverter:
             if 'pool_size' in layer['layer']['config'].keys():
                 kernel_w, kernel_h = layer['layer']['config']['pool_size']
             else:
-                print(layer)
-                raise NotImplementedError
+                print('[ERROR] Invalid configuration for pooling.')
+                print('=========================================')
+                print(layer['layer']['config'])
+                print('=========================================')
+                frameinfo = inspect.getframeinfo(inspect.currentframe())
+                print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                sys.exit(-1)
 
         if 'dilation_rate' in layer['layer']['config'].keys():
             dilation_w, dilation_h = layer['layer']['config']['dilation_rate']
@@ -767,8 +804,13 @@ class KerasConverter:
             if 'pool_size' in layer['layer']['config'].keys():
                 kernel_w, kernel_h = layer['layer']['config']['pool_size']
             else:
-                print(layer)
-                raise NotImplementedError
+                print('[ERROR] Invalid configuration for pooling.')
+                print('=========================================')
+                print(layer['layer']['config'])
+                print('=========================================')
+                frameinfo = inspect.getframeinfo(inspect.currentframe())
+                print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                sys.exit(-1)
 
         if 'dilation_rate' in layer['layer']['config'].keys():
             dilation_w, dilation_h = layer['layer']['config']['dilation_rate']
@@ -857,9 +899,14 @@ class KerasConverter:
                         ncnn_graph_helper,
                         ncnn_helper)
             else:
-                print(node_helper_name)
-                print(keras_graph_helper.get_node_attr(node_name))
-                raise NotImplementedError
+                layer = keras_graph_helper.get_node_attr(node_name)['layer']
+                print('[ERROR] Operator %s not support.' % layer['class_name'])
+                print('=========================================')
+                print(layer['config'])
+                print('=========================================')
+                frameinfo = inspect.getframeinfo(inspect.currentframe())
+                print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                sys.exit(-1)
 
         keras_graph_helper.refresh()
         ncnn_graph_helper.refresh()
