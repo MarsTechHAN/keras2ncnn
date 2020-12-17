@@ -58,6 +58,10 @@ def main():
     print('Start graph optimizing pass...')
     print('\tRemoving unused nodes...')
     GraphOptimization.removing_unused_nodes(keras_graph)
+    print('\tRemoving squeeze reshape after pooling...')
+    GraphOptimization.removing_reshape_after_global_pooling(keras_graph)
+
+    
 
     print('\tRefreshing graph...')
     keras_graph.refresh()
