@@ -407,15 +407,15 @@ class KerasConverter:
             ncnn_graph_helper,
             ncnn_helper):
 
-        ncnn_graph_attr = ncnn_helper.dump_args('Flatten')
-
+        ncnn_graph_attr = ncnn_helper.dump_args(
+                'Reshape', w=-1)
         ncnn_graph_helper.node(
             layer['layer']['name'],
             keras_graph_helper.get_node_inbounds(
                 layer['layer']['name']))
         ncnn_graph_helper.set_node_attr(
             layer['layer']['name'], {
-                'type': 'Flatten', 'param': ncnn_graph_attr, 'binary': []})
+                'type': 'Reshape', 'param': ncnn_graph_attr, 'binary': []})
 
     def ZeroPadding2D_helper(
             self,
