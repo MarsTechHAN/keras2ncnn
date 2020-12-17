@@ -94,10 +94,6 @@ class NcnnParamDispatcher:
             9: {'activation_type': 0},
         },
 
-        'Flatten': {
-
-        },
-
         'Input': {
             0: {'w': 0},
             1: {'h': 0},
@@ -141,6 +137,7 @@ class NcnnParamDispatcher:
             0: {'w': -233},
             1: {'h': -233},
             2: {'c': -233},
+            3: {'flag': 1}
         },
 
         'Sigmoid': {
