@@ -1,5 +1,6 @@
 from distutils import spawn as sp
 import glob
+import h5py
 import os
 import subprocess
 import shutil
@@ -163,7 +164,7 @@ int main(int argc, char** argv)
 
         return 0
 
-    def emit_file(self, file_name, ncnn_graph, keras_graph):
+    def emit_file(self, file_name, ncnn_graph, keras_graph, graph_seq):
 
         def replace_bs(x): return x.replace('/', '_')
 
@@ -171,7 +172,7 @@ int main(int argc, char** argv)
 
         c_payload = self.ncnn_prog_template
 
-        for layer_name in ncnn_graph.get_graph().keys():
+        for layer_name in graph_seq:
             layer_type = ncnn_graph.get_node_attr(layer_name)['type']
             if layer_type == 'Input':
                 op_shape = keras_graph.get_node_attr(
@@ -276,6 +277,7 @@ int main(int argc, char** argv)
         import numpy as np  # pylint: disable=import-outside-toplevel
         from tensorflow.python import keras  # pylint: disable=import-outside-toplevel
         from tensorflow.python.keras import backend as K  # pylint: disable=import-outside-toplevel
+        from tensorflow.python.keras.models import model_from_json
         K.set_learning_phase(0)
 
         from PIL import Image  # pylint: disable=import-outside-toplevel
@@ -303,7 +305,11 @@ int main(int argc, char** argv)
                                                   dtype='float32').reshape(*list(map(int, mat_sp[1:4])))
 
         # Inference using keras
-        model = keras.models.load_model(h5_file)
+        f = h5py.File(h5_file, mode='r')
+        model_config_raw = f.attrs.get('model_config')
+
+        model = model_from_json(model_config_raw)
+        model.load_weights(h5_file)
 
         output_node_names = [[], ]
         output_nodes = [[], ]
