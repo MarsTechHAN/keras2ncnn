@@ -132,6 +132,6 @@ def main():
         debugger.run_debug()
 
         print('\tRunning Keras Model...')
-        debugger.decode(args.input_file, keras_graph)
+        debugger.decode(args.input_file, keras_graph, graph_seq)
 
     print('Done!')
