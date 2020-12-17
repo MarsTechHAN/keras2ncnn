@@ -61,8 +61,6 @@ def main():
     print('\tRemoving squeeze reshape after pooling...')
     GraphOptimization.removing_reshape_after_global_pooling(keras_graph)
 
-    
-
     print('\tRefreshing graph...')
     keras_graph.refresh()
 
@@ -123,10 +121,8 @@ def main():
                     args.input_file).stem +
                 '.bin'), graph_seq)
 
-
-
         print('\tGenerting File...')
-        debugger.emit_file(Path(args.input_file).stem, ncnn_graph, keras_graph)
+        debugger.emit_file(Path(args.input_file).stem, ncnn_graph, keras_graph, graph_seq)
 
         print('\tCompiling...')
         debugger.run_debug()
