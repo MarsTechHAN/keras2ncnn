@@ -47,7 +47,8 @@ class KerasConverter:
         else:
             print('[ERROR] Explicit padding is not supported yet.')
             frameinfo = inspect.getframeinfo(inspect.currentframe())
-            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            print('Failed to convert at %s:%d %s()' %
+                  (frameinfo.filename, frameinfo.lineno, frameinfo.function))
             sys.exit(-1)
 
         bias_term = layer['layer']['config']['use_bias']
@@ -71,9 +72,12 @@ class KerasConverter:
                 activation_type = CONV2D_ACTIVATION_TYPE[layer['layer'][
                     'config']['activation']]
             else:
-                print('[ERROR] Activation type %s is is not supported yet.' % layer['layer']['config']['activation'])
+                print(
+                    '[ERROR] Activation type %s is is not supported yet.' %
+                    layer['layer']['config']['activation'])
                 frameinfo = inspect.getframeinfo(inspect.currentframe())
-                print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                print('Failed to convert at %s:%d %s()' %
+                      (frameinfo.filename, frameinfo.lineno, frameinfo.function))
                 sys.exit(-1)
         else:
             activation_type = 0
@@ -122,13 +126,22 @@ class KerasConverter:
         stride_w, stride_h = layer['layer']['config']['strides']
 
         if layer['layer']['config']['padding'] == 'valid':
-            pad_left = 0
+            print('[WARN] Valid padding is not tested yet.')
+            frameinfo = inspect.getframeinfo(inspect.currentframe())
         elif layer['layer']['config']['padding'] == 'same':
-            pad_left = -233
+            pad_left = kernel_w - stride_w
+            pad_top = kernel_h - stride_h
+            if pad_left < 0 or pad_top < 0:
+                print('[ERROR] Failed to calculate output shape.')
+                frameinfo = inspect.getframeinfo(inspect.currentframe())
+                print('Failed to convert at %s:%d %s()' %
+                      (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                sys.exit(-1)
         else:
             print('[ERROR] Explicit padding is not supported yet.')
             frameinfo = inspect.getframeinfo(inspect.currentframe())
-            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            print('Failed to convert at %s:%d %s()' %
+                  (frameinfo.filename, frameinfo.lineno, frameinfo.function))
             sys.exit(-1)
 
         bias_term = layer['layer']['config']['use_bias']
@@ -152,9 +165,12 @@ class KerasConverter:
                 activation_type = CONV2D_T_ACTIVATION_TYPE[layer['layer'][
                     'config']['activation']]
             else:
-                print('[ERROR] Activation type %s is is not supported yet.' % layer['layer']['config']['activation'])
+                print(
+                    '[ERROR] Activation type %s is is not supported yet.' %
+                    layer['layer']['config']['activation'])
                 frameinfo = inspect.getframeinfo(inspect.currentframe())
-                print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                print('Failed to convert at %s:%d %s()' %
+                      (frameinfo.filename, frameinfo.lineno, frameinfo.function))
                 sys.exit(-1)
         else:
             activation_type = 0
@@ -166,6 +182,7 @@ class KerasConverter:
             dilation_w=dilation_w,
             stride_w=stride_w,
             pad_left=pad_left,
+            pad_top=pad_top,
             bias_term=bias_term,
             weight_data_size=weight_data_size,
             kernel_h=kernel_h,
@@ -217,15 +234,14 @@ class KerasConverter:
         else:
             print('[ERROR] Explicit padding is not supported yet.')
             frameinfo = inspect.getframeinfo(inspect.currentframe())
-            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            print('Failed to convert at %s:%d %s()' %
+                  (frameinfo.filename, frameinfo.lineno, frameinfo.function))
             sys.exit(-1)
 
         bias_term = layer['layer']['config']['use_bias']
+
         if bias_term:
-            print('[ERROR] Depthwise Conv2D with bias is not supported yet.')
-            frameinfo = inspect.getframeinfo(inspect.currentframe())
-            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
-            sys.exit(-1)
+            bias_weight = layer['weight']['bias:0']
 
         weight_data_size = int(layer['weight']['depthwise_kernel:0'].size)
 
@@ -247,9 +263,16 @@ class KerasConverter:
             layer['layer']['name'],
             keras_graph_helper.get_node_inbounds(
                 layer['layer']['name']))
-        ncnn_graph_helper.set_node_attr(
-            layer['layer']['name'], {
-                'type': 'ConvolutionDepthWise', 'param': ncnn_graph_attr, 'binary': [weight]})
+
+        if bias_term:
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'ConvolutionDepthWise', 'param': ncnn_graph_attr, 'binary': [
+                        weight, bias_weight]})
+        else:
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'ConvolutionDepthWise', 'param': ncnn_graph_attr, 'binary': [weight]})
 
     def BatchNormalization_helper(
             self,
@@ -332,43 +355,57 @@ class KerasConverter:
         SUPPORTED_ACTIVATION = ['relu', 'sigmoid', 'softmax']
 
         if layer['layer']['config']['activation'] not in SUPPORTED_ACTIVATION:
-            print('[ERROR] Activation type %s is is not supported yet.' % layer['layer']['config']['activation'])
+            print(
+                '[ERROR] Activation type %s is is not supported yet.' %
+                layer['layer']['config']['activation'])
             frameinfo = inspect.getframeinfo(inspect.currentframe())
-            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            print('Failed to convert at %s:%d %s()' %
+                  (frameinfo.filename, frameinfo.lineno, frameinfo.function))
             sys.exit(-1)
 
         if layer['layer']['config']['activation'] == 'relu':
             if 'alpha' in layer['layer']['config'].keys():
-                negtive_slope = layer['layer']['config']['alpha']
+                negative_slope = layer['layer']['config']['alpha']
             else:
-                negtive_slope = 0.0
+                negative_slope = 0.0
 
             if 'max_value' in layer['layer']['config'].keys():
-                ncnn_graph_attr = ncnn_helper.dump_args(
-                    'Clip', max=layer['layer']['config']['max_value'])
-                ncnn_graph_helper.node(
-                    layer['layer']['name'] + '_Clip',
-                    keras_graph_helper.get_node_inbounds(
-                        layer['layer']['name']))
-                ncnn_graph_helper.set_node_attr(
-                    layer['layer']['name'] + '_Clip',
-                    {
-                        'type': 'Clip',
-                        'param': ncnn_graph_attr,
-                        'binary': [],
-                        'output_blobs': layer['layer']['name'] + '_Clip_blob'})
+                if layer['layer']['config']['max_value'] is not None:
+                    ncnn_graph_attr = ncnn_helper.dump_args(
+                        'Clip', max=layer['layer']['config']['max_value'])
+                    ncnn_graph_helper.node(
+                        layer['layer']['name'] + '_Clip',
+                        keras_graph_helper.get_node_inbounds(
+                            layer['layer']['name']))
+                    ncnn_graph_helper.set_node_attr(
+                        layer['layer']['name'] + '_Clip',
+                        {
+                            'type': 'Clip',
+                            'param': ncnn_graph_attr,
+                            'binary': [],
+                            'output_blobs': layer['layer']['name'] + '_Clip_blob'})
 
-                ncnn_graph_attr = ncnn_helper.dump_args(
-                    'ReLU', slope=negtive_slope)
-                ncnn_graph_helper.node(
-                    layer['layer']['name'], [
-                        layer['layer']['name'] + '_Clip', ])
-                ncnn_graph_helper.set_node_attr(
-                    layer['layer']['name'], {
-                        'type': 'ReLU', 'param': ncnn_graph_attr, 'binary': []})
+                    ncnn_graph_attr = ncnn_helper.dump_args(
+                        'ReLU', slope=negative_slope)
+                    ncnn_graph_helper.node(
+                        layer['layer']['name'], [
+                            layer['layer']['name'] + '_Clip', ])
+                    ncnn_graph_helper.set_node_attr(
+                        layer['layer']['name'], {
+                            'type': 'ReLU', 'param': ncnn_graph_attr, 'binary': []})
+                else:
+                    ncnn_graph_attr = ncnn_helper.dump_args(
+                        'ReLU', slope=negative_slope)
+                    ncnn_graph_helper.node(
+                        layer['layer']['name'],
+                        keras_graph_helper.get_node_inbounds(
+                            layer['layer']['name']))
+                    ncnn_graph_helper.set_node_attr(
+                        layer['layer']['name'], {
+                            'type': 'ReLU', 'param': ncnn_graph_attr, 'binary': []})
             else:
                 ncnn_graph_attr = ncnn_helper.dump_args(
-                    'ReLU', slope=negtive_slope)
+                    'ReLU', slope=negative_slope)
                 ncnn_graph_helper.node(
                     layer['layer']['name'],
                     keras_graph_helper.get_node_inbounds(
@@ -388,7 +425,7 @@ class KerasConverter:
             ncnn_graph_helper.set_node_attr(
                 layer['layer']['name'], {
                     'type': 'Sigmoid', 'param': ncnn_graph_attr, 'binary': []})
-        
+
         if layer['layer']['config']['activation'] == 'softmax':
             ncnn_graph_attr = ncnn_helper.dump_args(
                 'Softmax')
@@ -408,7 +445,7 @@ class KerasConverter:
             ncnn_helper):
 
         ncnn_graph_attr = ncnn_helper.dump_args(
-                'Reshape', w=-1)
+            'Reshape', w=-1)
         ncnn_graph_helper.node(
             layer['layer']['name'],
             keras_graph_helper.get_node_inbounds(
@@ -455,7 +492,8 @@ class KerasConverter:
             if layer['layer']['config']['threshold'] != 0:
                 print('[ERROR] Leaky Clip ReLU is supported by ncnn.')
                 frameinfo = inspect.getframeinfo(inspect.currentframe())
-                print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                print('Failed to convert at %s:%d %s()' %
+                      (frameinfo.filename, frameinfo.lineno, frameinfo.function))
                 sys.exit(-1)
 
         if 'negative_slope' in layer['layer']['config'].keys():
@@ -464,28 +502,39 @@ class KerasConverter:
             negative_slope = 0.0
 
         if 'max_value' in layer['layer']['config'].keys():
-            ncnn_graph_attr = ncnn_helper.dump_args(
-                'Clip', max=layer['layer']['config']['max_value'])
-            ncnn_graph_helper.node(
-                layer['layer']['name'] + '_Clip',
-                keras_graph_helper.get_node_inbounds(
-                    layer['layer']['name']))
-            ncnn_graph_helper.set_node_attr(
-                layer['layer']['name'] + '_Clip',
-                {
-                    'type': 'Clip',
-                    'param': ncnn_graph_attr,
-                    'binary': [],
-                    'output_blobs': layer['layer']['name'] + '_Clip_blob'})
+            if layer['layer']['config']['max_value'] is not None:
+                ncnn_graph_attr = ncnn_helper.dump_args(
+                    'Clip', max=layer['layer']['config']['max_value'])
+                ncnn_graph_helper.node(
+                    layer['layer']['name'] + '_Clip',
+                    keras_graph_helper.get_node_inbounds(
+                        layer['layer']['name']))
+                ncnn_graph_helper.set_node_attr(
+                    layer['layer']['name'] + '_Clip',
+                    {
+                        'type': 'Clip',
+                        'param': ncnn_graph_attr,
+                        'binary': [],
+                        'output_blobs': layer['layer']['name'] + '_Clip_blob'})
 
-            ncnn_graph_attr = ncnn_helper.dump_args(
-                'ReLU', slope=negative_slope)
-            ncnn_graph_helper.node(
-                layer['layer']['name'], [
-                    layer['layer']['name'] + '_Clip', ])
-            ncnn_graph_helper.set_node_attr(
-                layer['layer']['name'], {
-                    'type': 'ReLU', 'param': ncnn_graph_attr, 'binary': []})
+                ncnn_graph_attr = ncnn_helper.dump_args(
+                    'ReLU', slope=negative_slope)
+                ncnn_graph_helper.node(
+                    layer['layer']['name'], [
+                        layer['layer']['name'] + '_Clip', ])
+                ncnn_graph_helper.set_node_attr(
+                    layer['layer']['name'], {
+                        'type': 'ReLU', 'param': ncnn_graph_attr, 'binary': []})
+            else:
+                ncnn_graph_attr = ncnn_helper.dump_args(
+                    'ReLU', slope=negative_slope)
+                ncnn_graph_helper.node(
+                    layer['layer']['name'],
+                    keras_graph_helper.get_node_inbounds(
+                        layer['layer']['name']))
+                ncnn_graph_helper.set_node_attr(
+                    layer['layer']['name'], {
+                        'type': 'ReLU', 'param': ncnn_graph_attr, 'binary': []})
         else:
             ncnn_graph_attr = ncnn_helper.dump_args(
                 'ReLU', slope=negative_slope)
@@ -529,9 +578,12 @@ class KerasConverter:
 
         if layer['layer']['config']['activation'] not in SUPPORTED_ACTIVATION and \
                 layer['layer']['config']['activation'] not in SUPPORTED_FUSED_ACTIVATION_TYPE:
-            print('[ERROR] Activation type %s is is not supported yet.' % layer['layer']['config']['activation'])
+            print(
+                '[ERROR] Activation type %s is is not supported yet.' %
+                layer['layer']['config']['activation'])
             frameinfo = inspect.getframeinfo(inspect.currentframe())
-            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            print('Failed to convert at %s:%d %s()' %
+                  (frameinfo.filename, frameinfo.lineno, frameinfo.function))
             sys.exit(-1)
 
         num_output = layer['weight']['kernel:0'].shape[1]
@@ -629,7 +681,8 @@ class KerasConverter:
         if DIM_SEQ[layer['layer']['config']['axis']] == 0:
             print('[ERROR] Concat asix = 0 is not support. ncnn only have C/H/W Dim.')
             frameinfo = inspect.getframeinfo(inspect.currentframe())
-            print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            print('Failed to convert at %s:%d %s()' %
+                  (frameinfo.filename, frameinfo.lineno, frameinfo.function))
             sys.exit(-1)
 
         ncnn_graph_attr = ncnn_helper.dump_args(
@@ -708,6 +761,11 @@ class KerasConverter:
             ncnn_helper):
         target_shape = layer['layer']['config']['target_shape']
 
+        # repleace_233 = lambda x: x != -1
+        # target_shape = list(filter(repleace_233, target_shape))
+
+        print(target_shape)
+
         if(len(target_shape) == 4):
             ncnn_graph_attr = ncnn_helper.dump_args(
                 'Reshape', w=target_shape[2], h=target_shape[1], c=target_shape[3])
@@ -723,9 +781,14 @@ class KerasConverter:
                     if(len(target_shape) == 1):
                         return
                     else:
-                        print('[ERROR] Reshape Layer Dim %d is not supported.' % len(target_shape))
-                        frameinfo = inspect.getframeinfo(inspect.currentframe())
-                        print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                        print(
+                            '[ERROR] Reshape Layer Dim %d is not supported.' %
+                            len(target_shape))
+                        frameinfo = inspect.getframeinfo(
+                            inspect.currentframe())
+                        print(
+                            'Failed to convert at %s:%d %s()' %
+                            (frameinfo.filename, frameinfo.lineno, frameinfo.function))
                         sys.exit(-1)
 
         ncnn_graph_helper.node(
@@ -754,7 +817,8 @@ class KerasConverter:
                 print(layer['layer']['config'])
                 print('=========================================')
                 frameinfo = inspect.getframeinfo(inspect.currentframe())
-                print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                print('Failed to convert at %s:%d %s()' %
+                      (frameinfo.filename, frameinfo.lineno, frameinfo.function))
                 sys.exit(-1)
 
         if 'dilation_rate' in layer['layer']['config'].keys():
@@ -809,7 +873,8 @@ class KerasConverter:
                 print(layer['layer']['config'])
                 print('=========================================')
                 frameinfo = inspect.getframeinfo(inspect.currentframe())
-                print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                print('Failed to convert at %s:%d %s()' %
+                      (frameinfo.filename, frameinfo.lineno, frameinfo.function))
                 sys.exit(-1)
 
         if 'dilation_rate' in layer['layer']['config'].keys():
@@ -905,7 +970,8 @@ class KerasConverter:
                 print(layer['config'])
                 print('=========================================')
                 frameinfo = inspect.getframeinfo(inspect.currentframe())
-                print('Failed to convert at %s:%d %s()' % (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                print('Failed to convert at %s:%d %s()' %
+                      (frameinfo.filename, frameinfo.lineno, frameinfo.function))
                 sys.exit(-1)
 
         keras_graph_helper.refresh()
