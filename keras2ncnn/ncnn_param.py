@@ -1,3 +1,4 @@
+import inspect
 import sys
 
 
@@ -56,11 +57,11 @@ class NcnnParamDispatcher:
             12: {'dilation_h': 1},
             13: {'stride_h': 1},
             14: {'pad_top': 0},
-            # 15: {'pad_right': 0},
-            # 16: {'pad_bottom': 0},
+            15: {'pad_right': 0},
+            16: {'pad_bottom': 0},
 
-            # 18: {'output_pad_right': 0},
-            # 19: {'output_pad_bottom': 0},
+            18: {'output_pad_right': 0},
+            19: {'output_pad_bottom': 0},
 
             # 20: {'output_w': 0},
             # 21: {'output_h': 0},
@@ -181,5 +182,12 @@ class NcnnParamDispatcher:
                                    ','.join(list(map(str, params_arg))))
             else:
                 print(arg_name, params_arg, type(params_arg))
-                raise NotImplementedError
+                print('[ERROR] Failed to dump arg %s with type %s.' %
+                      (arg_name, type(params_arg)))
+                frameinfo = inspect.getframeinfo(inspect.currentframe())
+                calframe = inspect.getouterframes(inspect.currentframe(), 2)
+                print(
+                    'Failed to convert at %s:%d %s() called from %s()' %
+                    (frameinfo.filename, frameinfo.lineno, frameinfo.function, calframe[1][3]))
+                sys.exit(-1)
         return ncnn_args_phrase
