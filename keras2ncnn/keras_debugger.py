@@ -6,9 +6,6 @@ import subprocess
 import shutil
 import sys
 
-import virtualenv
-
-
 class KerasDebugger:
     ncnn_prog_template = \
         '''
@@ -114,6 +111,7 @@ int main(int argc, char** argv)
                     return -1
 
             # Setup virtualenv
+            import virtualenv # pylint: disable=import-outside-toplevel
             virtualenv.create_environment(self.tmp_dir)
 
             activator_filename = os.path.join(
