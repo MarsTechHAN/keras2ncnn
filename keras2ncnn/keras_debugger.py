@@ -102,6 +102,9 @@ int main(int argc, char** argv)
                 'cmake'
             ]
 
+            subprocess.run(
+                ['python3', '-m', 'pip', 'install', '--upgrade', 'virtualenv>=15.0.0'])
+
             for util in required_utils:
                 res = sp.find_executable(util)
                 if res is None:
