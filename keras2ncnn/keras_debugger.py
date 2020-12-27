@@ -95,6 +95,7 @@ int main(int argc, char** argv)
 
             # Test for compiler
             required_utils = [
+                'git',
                 'gcc',
                 'g++',
                 'make',
