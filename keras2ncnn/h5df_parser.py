@@ -4,9 +4,28 @@ import h5py
 
 class H5dfParser:
     def __init__(self, h5_file):
-        f = h5py.File(h5_file, mode='r')
-        self.f = f
-        model_config_raw = f.attrs.get('model_config')
+        try:
+            f = h5py.File(h5_file, mode='r')
+            self.f = f
+            model_config_raw = f.attrs.get('model_config')
+        except Exception as e:
+            print('[ERROR] Failed to read h5df file.')
+            print('You are not selecting a valid keras model file.')
+            print('You can check it by either opening it by Keras or Netron.')
+            print('If you are very confident of your file, please repoert a bug at:')
+            print('\thttps://github.com/MarsTechHAN/keras2ncnn')
+            sys.exit(-1)
+
+        if not isinstance(model_config_raw, (bytes, bytearray):
+            print('[ERROR] Failed to load structure descriptor from h5df file.')
+            print('You may load a weight only file.')
+            print('Such issue may caused by following ways:')
+            print('\t1. You are using model.save_weights instead of model.save')
+            print('\t2. You are trying to load a weight file download from somewhere.')
+            print('If you are very confident of your file, please repoert a bug at:')
+            print('\thttps://github.com/MarsTechHAN/keras2ncnn')
+            sys.exit(-1)
+
         self.model_config = json.loads(model_config_raw.decode('utf-8'))
         self.keras_version = self.get_keras_version()
 
