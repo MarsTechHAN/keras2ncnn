@@ -19,10 +19,12 @@ class GraphOptimization:
 
         for removed_nodes_name in nodes_to_remove:
             graph.remove_node(removed_nodes_name)
-    
+
     @staticmethod
     def removing_reshape_after_global_pooling(graph):
-        GLOBAL_POOLING_NODES = ['GlobalAveragePooling2D', 'MaxAveragePooling2D']
+        GLOBAL_POOLING_NODES = [
+            'GlobalAveragePooling2D',
+            'MaxAveragePooling2D']
         nodes_to_remove = []
 
         for target_node_name in graph.get_graph().keys():
@@ -30,7 +32,7 @@ class GraphOptimization:
                     'layer']['class_name'] in GLOBAL_POOLING_NODES:
                 for out_nodes in graph.get_node_outbounds(target_node_name):
                     if graph.get_node_attr(out_nodes)[
-                    'layer']['class_name'] == 'Reshape':
+                            'layer']['class_name'] == 'Reshape':
                         for layer_name in graph.get_graph().keys():
                             if out_nodes in graph.get_graph()[
                                     layer_name]['inbounds']:
@@ -42,4 +44,3 @@ class GraphOptimization:
 
         for removed_nodes_name in nodes_to_remove:
             graph.remove_node(removed_nodes_name)
-    

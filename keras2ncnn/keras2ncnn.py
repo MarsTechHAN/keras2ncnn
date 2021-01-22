@@ -122,7 +122,12 @@ def main():
                 '.bin'), graph_seq)
 
         print('\tGenerting File...')
-        debugger.emit_file(Path(args.input_file).stem, ncnn_graph, keras_graph, graph_seq)
+        debugger.emit_file(
+            Path(
+                args.input_file).stem,
+            ncnn_graph,
+            keras_graph,
+            graph_seq)
 
         print('\tCompiling...')
         debugger.run_debug()
