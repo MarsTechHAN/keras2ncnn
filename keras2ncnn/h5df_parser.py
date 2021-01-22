@@ -4,12 +4,21 @@ import sys
 
 
 class H5dfParser:
+
+    def __decode(self, payload):
+        if isinstance(payload, (bytes, bytearray)):
+            return payload.decode('utf-8')
+        if isinstance(payload, str):
+            return payload
+        return str(payload)
+
     def __init__(self, h5_file):
         try:
             f = h5py.File(h5_file, mode='r')
             self.f = f
             model_config_raw = f.attrs.get('model_config')
-        except Exception as e:
+
+        except Exception:
             print('[ERROR] Failed to read h5df file.')
             print('You are not selecting a valid keras model file.')
             print('You can check it by either opening it by Keras or Netron.')
@@ -17,7 +26,7 @@ class H5dfParser:
             print('https://github.com/MarsTechHAN/keras2ncnn')
             sys.exit(-1)
 
-        if not isinstance(model_config_raw, (bytes, bytearray)):
+        if not isinstance(model_config_raw, (str, bytes, bytearray)):
             print('[ERROR] Failed to load structure descriptor from h5df file.')
             print('You may load a weight only file.')
             print('Such issue may caused by following ways:')
@@ -27,7 +36,7 @@ class H5dfParser:
             print('https://github.com/MarsTechHAN/keras2ncnn')
             sys.exit(-1)
 
-        self.model_config = json.loads(model_config_raw.decode('utf-8'))
+        self.model_config = json.loads(self.__decode(model_config_raw))
         self.keras_version = self.get_keras_version()
 
         if self.keras_version != '1':
@@ -64,7 +73,7 @@ class H5dfParser:
         for key, val in obj.attrs.items():
             if key == 'weight_names':
                 weight_names = list(
-                    map(lambda x: x.decode('utf-8'), val.tolist()))
+                    map(lambda x: self.__decode(x), val.tolist()))
                 if len(weight_names) > 0:
                     wegith_group = '/'.join(weight_names[0].split('/')[0:-1])
                     self.weight_dict[name] = obj[wegith_group]
