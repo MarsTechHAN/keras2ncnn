@@ -974,5 +974,18 @@ class KerasConverter:
                       (frameinfo.filename, frameinfo.lineno, frameinfo.function))
                 sys.exit(-1)
 
-        keras_graph_helper.refresh()
+        ncnn_graph_helper.refresh()
+
+        for graph_head in ncnn_graph_helper.get_graph_head():
+            node_attr = ncnn_graph_helper.get_node_attr(graph_head)
+            if node_attr['type'] not in ['Input']:
+                ncnn_graph_attr = ncnn_helper.dump_args(
+                    'Input', w=-1, h=-1, c=-1)
+                ncnn_graph_helper.node(
+                    graph_head + '_input', [])
+                ncnn_graph_helper.set_node_attr(
+                    graph_head + '_input', {
+                        'type': 'Input', 'param': ncnn_graph_attr, 'binary': []})
+                ncnn_graph_helper.add_node_inbounds(graph_head, graph_head + '_input')
+                
         ncnn_graph_helper.refresh()
