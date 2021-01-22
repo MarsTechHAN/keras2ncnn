@@ -986,6 +986,7 @@ class KerasConverter:
                 ncnn_graph_helper.set_node_attr(
                     graph_head + '_input', {
                         'type': 'Input', 'param': ncnn_graph_attr, 'binary': []})
-                ncnn_graph_helper.add_node_inbounds(graph_head, graph_head + '_input')
-                
+                ncnn_graph_helper.add_node_inbounds(
+                    graph_head, graph_head + '_input')
+
         ncnn_graph_helper.refresh()

@@ -6,6 +6,7 @@ import subprocess
 import shutil
 import sys
 
+
 class KerasDebugger:
     ncnn_prog_template = \
         '''
@@ -99,8 +100,8 @@ int main(int argc, char** argv)
                 'cmake'
             ]
 
-            subprocess.run(
-                ['python3', '-m', 'pip', 'install', '--upgrade', 'virtualenv>=15.0.0'])
+            subprocess.run(['python3', '-m', 'pip', 'install',
+                            '--upgrade', 'virtualenv>=15.0.0'])
 
             for util in required_utils:
                 res = sp.find_executable(util)
@@ -111,7 +112,7 @@ int main(int argc, char** argv)
                     return -1
 
             # Setup virtualenv
-            import virtualenv # pylint: disable=import-outside-toplevel
+            import virtualenv  # pylint: disable=import-outside-toplevel
             virtualenv.create_environment(self.tmp_dir)
 
             activator_filename = os.path.join(
