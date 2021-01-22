@@ -761,11 +761,6 @@ class KerasConverter:
             ncnn_helper):
         target_shape = layer['layer']['config']['target_shape']
 
-        # repleace_233 = lambda x: x != -1
-        # target_shape = list(filter(repleace_233, target_shape))
-
-        print(target_shape)
-
         if(len(target_shape) == 4):
             ncnn_graph_attr = ncnn_helper.dump_args(
                 'Reshape', w=target_shape[2], h=target_shape[1], c=target_shape[3])
