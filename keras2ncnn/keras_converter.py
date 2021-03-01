@@ -515,7 +515,7 @@ class KerasConverter:
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        ncnn_graph_attr = ncnn_helper.dump_args('Eltwise', op_type=0)
+        ncnn_graph_attr = ncnn_helper.dump_args('BinaryOp', op_type=2, with_scalar=0)
 
         ncnn_graph_helper.node(
             layer['layer']['name'],
