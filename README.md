@@ -18,21 +18,25 @@ python3 -m keras2ncnn -i SOME_H5DF_FILE.h5 -o DIR_TO_SAVE_NCNN_PARAM --plot_grap
 ---
 ## Supported Op
 - InputLayer
-- Conv2D 
-- Conv2DTranspose 
+- Conv2D (Linear, Softmax, ReLU, Sigmoid)
+- Conv2DTranspose (Linear, ReLU, Sigmoid)
 - DepthwiseConv2D
+- SeparableConv2D (Linear, Softmax, ReLU, Sigmoid)
 - Add
 - Multiply
+- Concatenate
 - ZeroPadding2D
 - ReLU
 - LeakyReLU
+- Activation (Softmax, ReLU, Sigmoid)
 - UpSampling2D
-- Concatenate
 - GlobalAveragePooling2D
 - MaxAveragePooling2D
 - AveragePooling2D
 - MaxPooling2D
 - BatchNormalization
-- Dense
-- Activation 
-
+- Dense (Linear, Softmax, ReLU, Sigmoid)
+- Flatten
+- Reshape
+- Maximum
+- TensorFlowOpLayer (Mul with constant)
