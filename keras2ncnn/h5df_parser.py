@@ -123,6 +123,7 @@ class H5dfParser:
                     layer_name = layers['name']
                 else:
                     layer_name = layers['config']['name']
+                    layers['name'] = layers['config']['name']
 
                 inbound_nodes = self.join_inbound_nodes(layers)
                 if len(inbound_nodes) == 0:
