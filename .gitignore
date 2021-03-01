@@ -142,3 +142,5 @@ dmypy.json
 *.gv
 *.pdf
 *.jpg
+
+.keras2ncnn_build
