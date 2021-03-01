@@ -29,7 +29,9 @@ class KerasConverter:
     def Conv2D_helper(self, layer, keras_graph_helper,
                       ncnn_graph_helper, ncnn_helper):
 
-        CONV2D_ACTIVATION_TYPE = {
+        CONV2D_SUPPORTED_ACTIVATION = ['softmax']
+        CONV2D_FUSED_ACTIVATION_TYPE = {
+            '': 0,
             'linear': 0,
             'relu': 1,
             'sigmoid': 4
@@ -68,48 +70,105 @@ class KerasConverter:
                                             [3, 2, 0, 1]).flatten(), 0, 0)
 
         if 'activation' in layer['layer']['config']:
-            if layer['layer']['config']['activation'] in CONV2D_ACTIVATION_TYPE.keys():
-                activation_type = CONV2D_ACTIVATION_TYPE[layer['layer'][
+            if layer['layer']['config']['activation'] in CONV2D_FUSED_ACTIVATION_TYPE.keys():
+                activation_type = CONV2D_FUSED_ACTIVATION_TYPE[layer['layer'][
                     'config']['activation']]
+            else:
+                activation_type = -1
+        else:
+            activation_type = 0
+
+        if activation_type > -1:
+            ncnn_graph_attr = ncnn_helper.dump_args(
+                'Convolution',
+                num_output=num_output,
+                kernel_w=kernel_w,
+                dilation_w=dilation_w,
+                stride_w=stride_w,
+                pad_left=pad_left,
+                bias_term=bias_term,
+                weight_data_size=weight_data_size,
+                kernel_h=kernel_h,
+                dilation_h=dilation_h,
+                stride_h=stride_h,
+                activation_type=activation_type)
+        
+            ncnn_graph_helper.node(
+                layer['layer']['name'],
+                keras_graph_helper.get_node_inbounds(
+                    layer['layer']['name']))
+
+            if bias_term:
+                ncnn_graph_helper.set_node_attr(
+                    layer['layer']['name'], {
+                        'type': 'Convolution', 'param': ncnn_graph_attr, 'binary': [
+                            kernel_weight, bias_weight]})
+            else:
+                ncnn_graph_helper.set_node_attr(
+                    layer['layer']['name'], {
+                        'type': 'Convolution', 'param': ncnn_graph_attr, 'binary': [weight]})
+        else:
+            if layer['layer']['config']['activation'] in CONV2D_SUPPORTED_ACTIVATION:
+                if layer['layer']['config']['activation'] == 'softmax':
+                    ncnn_graph_attr = ncnn_helper.dump_args(
+                        'Convolution',
+                        num_output=num_output,
+                        kernel_w=kernel_w,
+                        dilation_w=dilation_w,
+                        stride_w=stride_w,
+                        pad_left=pad_left,
+                        bias_term=bias_term,
+                        weight_data_size=weight_data_size,
+                        kernel_h=kernel_h,
+                        dilation_h=dilation_h,
+                        stride_h=stride_h)
+                    
+                    ncnn_graph_helper.node(
+                        layer['layer']['name'],
+                        keras_graph_helper.get_node_inbounds(
+                            layer['layer']['name']))
+
+                    if bias_term:
+                        ncnn_graph_helper.set_node_attr(
+                            layer['layer']['name'], {
+                                'type': 'Convolution', 'param': ncnn_graph_attr, 'binary': [
+                                    kernel_weight, bias_weight]})
+                    else:
+                        ncnn_graph_helper.set_node_attr(
+                            layer['layer']['name'], {
+                                'type': 'Convolution', 'param': ncnn_graph_attr, 'binary': [weight]})
+
+                    outbound_layers = []
+
+                    for name in keras_graph_helper.get_graph().keys():
+                        for node in keras_graph_helper.get_graph()[name]['inbounds']:
+                            if layer['layer']['name'] == node:
+                                outbound_layers.append(name)
+
+                    ncnn_graph_attr = ncnn_helper.dump_args('Softmax')
+                    ncnn_graph_helper.node(
+                        layer['layer']['name'] + '_Softmax', [layer['layer']['name'], ])
+                    ncnn_graph_helper.set_node_attr(
+                        layer['layer']['name'] + '_Softmax', {
+                            'type': 'Softmax', 'param': ncnn_graph_attr, 'binary': []})
+
+                    keras_graph_helper.node(
+                        layer['layer']['name'] + '_Softmax', [layer['layer']['name'], ])
+
+                    for outbound_layer in outbound_layers:
+                        keras_graph_helper.remove_node_inbounds(
+                            outbound_layer, layer['layer']['name'])
+                        keras_graph_helper.add_node_inbounds(
+                            outbound_layer, layer['layer']['name'] + '_Softmax')
             else:
                 print(
                     '[ERROR] Activation type %s is is not supported yet.' %
                     layer['layer']['config']['activation'])
                 frameinfo = inspect.getframeinfo(inspect.currentframe())
                 print('Failed to convert at %s:%d %s()' %
-                      (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                    (frameinfo.filename, frameinfo.lineno, frameinfo.function))
                 sys.exit(-1)
-        else:
-            activation_type = 0
-
-        ncnn_graph_attr = ncnn_helper.dump_args(
-            'Convolution',
-            num_output=num_output,
-            kernel_w=kernel_w,
-            dilation_w=dilation_w,
-            stride_w=stride_w,
-            pad_left=pad_left,
-            bias_term=bias_term,
-            weight_data_size=weight_data_size,
-            kernel_h=kernel_h,
-            dilation_h=dilation_h,
-            stride_h=stride_h,
-            activation_type=activation_type)
-
-        ncnn_graph_helper.node(
-            layer['layer']['name'],
-            keras_graph_helper.get_node_inbounds(
-                layer['layer']['name']))
-
-        if bias_term:
-            ncnn_graph_helper.set_node_attr(
-                layer['layer']['name'], {
-                    'type': 'Convolution', 'param': ncnn_graph_attr, 'binary': [
-                        kernel_weight, bias_weight]})
-        else:
-            ncnn_graph_helper.set_node_attr(
-                layer['layer']['name'], {
-                    'type': 'Convolution', 'param': ncnn_graph_attr, 'binary': [weight]})
+                   
 
     def Conv2DTranspose_helper(self, layer, keras_graph_helper,
                                ncnn_graph_helper, ncnn_helper):
@@ -273,6 +332,125 @@ class KerasConverter:
             ncnn_graph_helper.set_node_attr(
                 layer['layer']['name'], {
                     'type': 'ConvolutionDepthWise', 'param': ncnn_graph_attr, 'binary': [weight]})
+
+    def SeparableConv2D_helper(
+            self,
+            layer,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper):
+
+        SEPCONV2D_ACTIVATION_TYPE = {
+            'linear': 0,
+            'relu': 1,
+            'sigmoid': 4
+        }
+
+        # Fetch weight 
+        dw_weight = np.insert(
+            np.transpose(
+                layer['weight']['depthwise_kernel:0'], [
+                    3, 2, 0, 1]).flatten(), 0, 0)
+
+        pw_weight = np.insert(
+            np.transpose(
+                layer['weight']['pointwise_kernel:0'], [
+                    3, 2, 0, 1]).flatten(), 0, 0)
+
+        # Insert dwconv
+        num_output = layer['weight']['depthwise_kernel:0'].shape[2] * \
+            layer['layer']['config']['depth_multiplier']
+        group = layer['weight']['depthwise_kernel:0'].shape[2]
+
+        kernel_w, kernel_h = layer['layer']['config']['kernel_size']
+
+        dilation_w, dilation_h = layer['layer']['config']['dilation_rate']
+
+        stride_w, stride_h = layer['layer']['config']['strides']
+
+        if layer['layer']['config']['padding'] == 'valid':
+            pad_left = 0
+        elif layer['layer']['config']['padding'] == 'same':
+            pad_left = -233
+        else:
+            print('[ERROR] Explicit padding is not supported yet.')
+            frameinfo = inspect.getframeinfo(inspect.currentframe())
+            print('Failed to convert at %s:%d %s()' %
+                  (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            sys.exit(-1)
+
+        weight_data_size = int(layer['weight']['depthwise_kernel:0'].size)
+
+        ncnn_graph_attr = ncnn_helper.dump_args(
+            'ConvolutionDepthWise',
+            num_output=num_output,
+            kernel_w=kernel_w,
+            dilation_w=dilation_w,
+            stride_w=stride_w,
+            pad_left=pad_left,
+            weight_data_size=weight_data_size,
+            group=group,
+            kernel_h=kernel_h,
+            dilation_h=dilation_h,
+            stride_h=stride_h)
+
+        ncnn_graph_helper.node(
+            layer['layer']['name'] + '_dw',
+            keras_graph_helper.get_node_inbounds(
+                layer['layer']['name']))
+
+        ncnn_graph_helper.set_node_attr(
+            layer['layer']['name']  + '_dw', {
+                'type': 'ConvolutionDepthWise', 'param': ncnn_graph_attr, 'binary': [dw_weight]})
+
+        # Fill pwconv params
+        num_output = layer['layer']['config']['filters']
+        bias_term = layer['layer']['config']['use_bias']
+        if bias_term:
+            bias_weight = layer['weight']['bias:0']
+
+        if 'activation' in layer['layer']['config']:
+            if layer['layer']['config']['activation'] in SEPCONV2D_ACTIVATION_TYPE.keys():
+                activation_type = SEPCONV2D_ACTIVATION_TYPE[layer['layer'][
+                    'config']['activation']]
+            else:
+                print(
+                    '[ERROR] Activation type %s is is not supported yet.' %
+                    layer['layer']['config']['activation'])
+                frameinfo = inspect.getframeinfo(inspect.currentframe())
+                print('Failed to convert at %s:%d %s()' %
+                      (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                sys.exit(-1)
+        else:
+            activation_type = 0
+
+        ncnn_graph_attr = ncnn_helper.dump_args(
+            'Convolution',
+            num_output=num_output,
+            kernel_w=1,
+            dilation_w=1,
+            stride_w=1,
+            pad_left=pad_left,
+            bias_term=bias_term,
+            weight_data_size=weight_data_size,
+            kernel_h=1,
+            dilation_h=1,
+            stride_h=1,
+            activation_type=activation_type)
+
+        ncnn_graph_helper.node(
+            layer['layer']['name'],
+            [layer['layer']['name']+'_dw'])
+
+        if bias_term:
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'Convolution', 'param': ncnn_graph_attr, 'binary': [
+                        pw_weight, bias_weight]})
+        else:
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'Convolution', 'param': ncnn_graph_attr, 'binary': [pw_weight]})
 
     def BatchNormalization_helper(
             self,
@@ -906,6 +1084,73 @@ class KerasConverter:
             layer['layer']['name'], {
                 'type': 'Pooling', 'param': ncnn_graph_attr, 'binary': []})
 
+    def Maximum_helper(
+            self,
+            layer,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper):
+        ncnn_graph_attr = ncnn_helper.dump_args('Eltwise', op_type=2)
+
+        ncnn_graph_helper.node(
+            layer['layer']['name'],
+            keras_graph_helper.get_node_inbounds(
+                layer['layer']['name']))
+        ncnn_graph_helper.set_node_attr(
+            layer['layer']['name'], {
+                'type': 'Eltwise', 'param': ncnn_graph_attr, 'binary': []})
+
+    def TensorFlowOpLayer_helper(
+            self,
+            layer,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper):
+        TFOPL_SUPPORTED_OP = ['Mul']
+
+        operator = layer['layer']['config']['node_def']['op']
+        if operator not in TFOPL_SUPPORTED_OP:
+            print('[ERROR] Config for TensorFlowOpLayer is not supported yet.')
+            print('=========================================')
+            print(layer['layer'])
+            print('=========================================')
+            frameinfo = inspect.getframeinfo(inspect.currentframe())
+            print('Failed to convert at %s:%d %s()' %
+                    (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            sys.exit(-1)
+        
+        if operator == 'Mul':
+            # Create a MemoryData for storing the constant
+            constant = layer['layer']['config']['constants']
+            if len(constant) != 1:
+                print('[ERROR] Config for TensorFlowOpLayer is not supported yet.')
+                print('=========================================')
+                print(layer['layer'])
+                print('=========================================')
+                frameinfo = inspect.getframeinfo(inspect.currentframe())
+                print('Failed to convert at %s:%d %s()' %
+                        (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                sys.exit(-1)
+            
+            # ncnn_graph_attr = ncnn_helper.dump_args('MemoryData', w=1)
+            # ncnn_graph_helper.node(
+            #     layer['layer']['name']+'_const', [])
+            # ncnn_graph_helper.set_node_attr(
+            #     layer['layer']['name']+'_const', {
+            #         'type': 'MemoryData', 'param': ncnn_graph_attr, 'binary': [[constant['0']]]})
+
+            # Insert the mul layer
+            ncnn_graph_attr = ncnn_helper.dump_args('BinaryOp', op_type=2, with_scalar=constant['0'])
+
+            ncnn_graph_helper.node(
+                layer['layer']['name'],
+                keras_graph_helper.get_node_inbounds(
+                    layer['layer']['name']))
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'BinaryOp', 'param': ncnn_graph_attr, 'binary': []})
+
+
     def insert_split(
             self,
             layer_name,
@@ -973,7 +1218,7 @@ class KerasConverter:
 
         for graph_head in ncnn_graph_helper.get_graph_head():
             node_attr = ncnn_graph_helper.get_node_attr(graph_head)
-            if node_attr['type'] not in ['Input']:
+            if node_attr['type'] not in ['Input', 'MemoryData']:
                 ncnn_graph_attr = ncnn_helper.dump_args(
                     'Input', w=-1, h=-1, c=-1)
                 ncnn_graph_helper.node(
