@@ -55,16 +55,16 @@ class H5dfParser:
 
     def get_keras_version(self):
         if 'keras_version' in self.f['model_weights'].attrs:
-            original_keras_version = self.f['model_weights']\
-                .attrs['keras_version'].decode('utf8')
+            original_keras_version = self.__decode(self.f['model_weights']\
+                .attrs['keras_version'])
             return original_keras_version
         else:
             return '1'
 
     def get_backend_version(self):
         if 'backend' in self.f['model_weights'].attrs:
-            original_backend = self.f['model_weights']\
-                .attrs['backend'].decode('utf8')
+            original_backend = self.__decode(self.f['model_weights']\
+                .attrs['backend'])
             return original_backend
         else:
             return None
