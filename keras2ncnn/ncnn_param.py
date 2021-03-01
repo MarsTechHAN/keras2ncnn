@@ -12,7 +12,7 @@ class NcnnParamDispatcher:
         'BinaryOp': {
             0: {'op_type': 0},
             1: {'with_scalar': 0},
-            # 2: {'b': 0.},
+            2: {'b': 0.},
         },
 
         'Clip': {

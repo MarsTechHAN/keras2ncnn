@@ -424,6 +424,8 @@ class KerasConverter:
         else:
             activation_type = 0
 
+        weight_data_size = int(layer['weight']['pointwise_kernel:0'].size)
+
         ncnn_graph_attr = ncnn_helper.dump_args(
             'Convolution',
             num_output=num_output,
@@ -497,7 +499,7 @@ class KerasConverter:
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        ncnn_graph_attr = ncnn_helper.dump_args('Eltwise', op_type=1)
+        ncnn_graph_attr = ncnn_helper.dump_args('BinaryOp', op_type=0, with_scalar=0)
 
         ncnn_graph_helper.node(
             layer['layer']['name'],
@@ -505,7 +507,7 @@ class KerasConverter:
                 layer['layer']['name']))
         ncnn_graph_helper.set_node_attr(
             layer['layer']['name'], {
-                'type': 'Eltwise', 'param': ncnn_graph_attr, 'binary': []})
+                'type': 'BinaryOp', 'param': ncnn_graph_attr, 'binary': []})
 
     def Multiply_helper(
             self,
@@ -1090,7 +1092,7 @@ class KerasConverter:
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        ncnn_graph_attr = ncnn_helper.dump_args('Eltwise', op_type=2)
+        ncnn_graph_attr = ncnn_helper.dump_args('BinaryOp', op_type=4, with_scalar=0)
 
         ncnn_graph_helper.node(
             layer['layer']['name'],
@@ -1098,7 +1100,7 @@ class KerasConverter:
                 layer['layer']['name']))
         ncnn_graph_helper.set_node_attr(
             layer['layer']['name'], {
-                'type': 'Eltwise', 'param': ncnn_graph_attr, 'binary': []})
+                'type': 'BinaryOp', 'param': ncnn_graph_attr, 'binary': []})
 
     def TensorFlowOpLayer_helper(
             self,
@@ -1140,7 +1142,7 @@ class KerasConverter:
             #         'type': 'MemoryData', 'param': ncnn_graph_attr, 'binary': [[constant['0']]]})
 
             # Insert the mul layer
-            ncnn_graph_attr = ncnn_helper.dump_args('BinaryOp', op_type=2, with_scalar=constant['0'])
+            ncnn_graph_attr = ncnn_helper.dump_args('BinaryOp', op_type=2, with_scalar=1, b=constant['0'])
 
             ncnn_graph_helper.node(
                 layer['layer']['name'],
