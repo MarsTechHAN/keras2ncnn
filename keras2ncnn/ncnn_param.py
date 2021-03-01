@@ -12,7 +12,7 @@ class NcnnParamDispatcher:
         'BinaryOp': {
             0: {'op_type': 0},
             1: {'with_scalar': 0},
-            2: {'b': 0},
+            # 2: {'b': 0.},
         },
 
         'Clip': {
@@ -114,8 +114,8 @@ class NcnnParamDispatcher:
             1: {'bottom': 0},
             2: {'left': 0},
             3: {'right': 0},
-            4: {'type': 0},
-            5: {'value': 0}
+            # 4: {'type': 0},
+            # 5: {'value': 0}
         },
 
         'Pooling': {
@@ -151,6 +151,12 @@ class NcnnParamDispatcher:
         'Split': {
 
         },
+
+        'MemoryData': {
+            0: {'w': 0},
+            1: {'h': 0},
+            2: {'c': 0}
+        }
 
     }
 
