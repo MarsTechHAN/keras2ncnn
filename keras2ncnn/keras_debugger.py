@@ -101,7 +101,7 @@ int main(int argc, char** argv)
             ]
 
             subprocess.run(['python3', '-m', 'pip', 'install',
-                            '--upgrade', 'virtualenv>=15.0.0'])
+                            '--upgrade', 'virtualenv==16.7.9'])
 
             for util in required_utils:
                 res = sp.find_executable(util)
@@ -179,11 +179,12 @@ int main(int argc, char** argv)
             layer_type = ncnn_graph.get_node_attr(layer_name)['type']
             if layer_type == 'Input':
                 op_shape = keras_graph.get_node_attr(
-                    layer_name)['layer']['config']['batch_input_shape'][1:]
-                if None in op_shape:
+                    layer_name)
+                if op_shape == None or None in op_shape:
                     print('Input has undetermind shape in W/H/C, default to 224,224,3')
                     op_shape = [3, 224, 224]
-
+                else:
+                    op_shape = op_shape['layer']['config']['batch_input_shape'][1:]
                 extractor_list.append(
                     self.input_extractor_template.replace(
                         '$layer_name$',
