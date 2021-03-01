@@ -119,17 +119,20 @@ class H5dfParser:
                 self.parse_model_graph(
                     layers['config']['layers'], graph_helper)
             else:
+                if layers['class_name'] == 'TensorFlowOpLayer':
+                    layer_name = layers['name']
+                else:
+                    layer_name = layers['config']['name']
+
                 inbound_nodes = self.join_inbound_nodes(layers)
                 if len(inbound_nodes) == 0:
                     inbound_nodes = graph_helper.get_graph_tail()
 
-                layers['name'] = layers['config']['name']
-
-                graph_helper.node(layers['config']['name'], inbound_nodes)
+                graph_helper.node(layer_name, inbound_nodes)
                 graph_helper.set_node_attr(
-                    layers['config']['name'], {
+                    layer_name, {
                         'layer': layers, 'weight': self.find_weights_root(
-                            layers['config']['name'])})
+                            layer_name)})
 
     def parse_model_graph(self, model_layers, graph_helper):
         for layer in model_layers:
