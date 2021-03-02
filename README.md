@@ -30,8 +30,10 @@ python3 -m keras2ncnn -i SOME_H5DF_FILE.h5 -o DIR_TO_SAVE_NCNN_PARAM --plot_grap
 - LeakyReLU
 - Activation (Softmax, ReLU, Sigmoid)
 - UpSampling2D
+- BilinearUpsampling
+- Cropping2D
 - GlobalAveragePooling2D
-- MaxAveragePooling2D
+- GlobalMaxPooling2D
 - AveragePooling2D
 - MaxPooling2D
 - BatchNormalization
