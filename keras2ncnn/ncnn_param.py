@@ -41,6 +41,18 @@ class NcnnParamDispatcher:
             13: {'stride_h': 1},
         },
 
+        'Crop': {
+            0: {'woffset': 0},
+            1: {'hoffset': 0},
+            2: {'coffset': 0},
+            3: {'outw': 0},
+            4: {'outh': 0},
+            5: {'outc': 0},
+            6: {'woffset2': 0},
+            7: {'hoffset2': 0},
+            8: {'coffset2': 0},
+        },
+
         'Deconvolution': {
             0: {'num_output': 0},
             1: {'kernel_w': 0},

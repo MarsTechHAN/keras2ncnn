@@ -875,6 +875,25 @@ class KerasConverter:
             layer['layer']['name'], {
                 'type': 'Concat', 'param': ncnn_graph_attr, 'binary': []})
 
+    def BilinearUpsampling_helper(
+            self,
+            layer,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper):
+        ncnn_graph_attr = ncnn_helper.dump_args(
+            'Interp', 
+            resize_type=2,
+            output_height=layer['layer']['config']['output_size'][0],
+            output_width=layer['layer']['config']['output_size'][1])
+        ncnn_graph_helper.node(
+            layer['layer']['name'],
+            keras_graph_helper.get_node_inbounds(
+                layer['layer']['name']))
+        ncnn_graph_helper.set_node_attr(
+            layer['layer']['name'], {
+                'type': 'Interp', 'param': ncnn_graph_attr, 'binary': []})
+
     def UpSampling2D_helper(
             self,
             layer,
@@ -973,6 +992,26 @@ class KerasConverter:
         ncnn_graph_helper.set_node_attr(
             layer['layer']['name'], {
                 'type': 'Reshape', 'param': ncnn_graph_attr, 'binary': []})
+    def Cropping2D_helper(
+            self,
+            layer,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper):
+        ncnn_graph_attr = ncnn_helper.dump_args(
+            'Crop',
+            woffset=layer['layer']['config']['cropping'][1][0],
+            hoffset=layer['layer']['config']['cropping'][0][0],
+            woffset2=layer['layer']['config']['cropping'][1][1],
+            hoffset2=layer['layer']['config']['cropping'][0][1])
+
+        ncnn_graph_helper.node(
+            layer['layer']['name'],
+            keras_graph_helper.get_node_inbounds(
+                layer['layer']['name']))
+        ncnn_graph_helper.set_node_attr(
+            layer['layer']['name'], {
+                'type': 'Crop', 'param': ncnn_graph_attr, 'binary': []})
 
     def AveragePooling2D_helper(
             self,
