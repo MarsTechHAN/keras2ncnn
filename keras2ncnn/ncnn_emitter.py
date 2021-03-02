@@ -68,8 +68,8 @@ class NcnnEmitter:
 
             param_contect += (
                 ('%s' + (
-                    25 - len(layer_type)) * ' ' + '%s' + (
-                    40 - len(layer_name)) * ' ' + '%d %d %s %s %s\n') % (layer_type,
+                    max(1, 25 - len(layer_type))) * ' ' + '%s' + (
+                    max(1, 40 - len(layer_name))) * ' ' + '%d %d %s %s %s\n') % (layer_type,
                                                                          layer_name,
                                                                          input_count,
                                                                          output_count,
