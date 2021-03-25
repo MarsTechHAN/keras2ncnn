@@ -108,7 +108,7 @@ int main(int argc, char** argv)
                 if res is None:
                     print(
                         '\t%s is not inside PATH, please install it first.' %
-                        res)
+                        util)
                     return -1
 
             # Setup virtualenv
@@ -122,7 +122,7 @@ int main(int argc, char** argv)
 
             install_pkg_list = [
                 'numpy',
-                'tensorflow==1.14',
+                'tensorflow',
                 'matplotlib',
                 'scipy'
             ]
@@ -262,7 +262,7 @@ int main(int argc, char** argv)
             pass
 
         subprocess.run(
-            'cd %s; cmake -DNCNN_BENCHMARK=ON ..; cd benchmark; make -j4' %
+            'cd %s; cmake -DNCNN_BENCHMARK=ON ..; cd benchmark; make -j' %
             os.path.join(
                 self.tmp_dir,
                 'ncnn',
