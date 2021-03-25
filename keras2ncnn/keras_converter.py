@@ -6,6 +6,13 @@ import sys
 class KerasConverter:
     MULTI_OUTPUT_OP = []
 
+    @staticmethod
+    def replaceDefault(content, key, default=1):
+        if key in content.keys():
+            return content[key]
+        else:
+            return default
+
     def InputLayer_helper(self, layer, keras_graph_helper,
                           ncnn_graph_helper, ncnn_helper):
 
@@ -359,7 +366,8 @@ class KerasConverter:
 
         # Insert dwconv
         num_output = layer['weight']['depthwise_kernel:0'].shape[2] * \
-            layer['layer']['config']['depth_multiplier']
+            self.replaceDefault(layer['layer']['config'], 'depth_multiplier')
+
         group = layer['weight']['depthwise_kernel:0'].shape[2]
 
         kernel_w, kernel_h = layer['layer']['config']['kernel_size']
@@ -532,7 +540,7 @@ class KerasConverter:
             ncnn_graph_helper,
             ncnn_helper):
 
-        SUPPORTED_ACTIVATION = ['relu', 'sigmoid', 'softmax']
+        SUPPORTED_ACTIVATION = ['relu', 'relu6', 'sigmoid', 'softmax']
 
         if layer['layer']['config']['activation'] not in SUPPORTED_ACTIVATION:
             print(
@@ -543,11 +551,15 @@ class KerasConverter:
                   (frameinfo.filename, frameinfo.lineno, frameinfo.function))
             sys.exit(-1)
 
-        if layer['layer']['config']['activation'] == 'relu':
+        if layer['layer']['config']['activation'] in ['relu', 'relu6']:
             if 'alpha' in layer['layer']['config'].keys():
                 negative_slope = layer['layer']['config']['alpha']
             else:
                 negative_slope = 0.0
+
+            if layer['layer']['config']['activation'] == 'relu6':
+                layer['layer']['config']['max_value'] = 6.0
+                layer['layer']['config']['activation'] = 'relu'
 
             if 'max_value' in layer['layer']['config'].keys():
                 if layer['layer']['config']['max_value'] is not None:
