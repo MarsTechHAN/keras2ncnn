@@ -99,7 +99,7 @@ class KerasConverter:
                 dilation_h=dilation_h,
                 stride_h=stride_h,
                 activation_type=activation_type)
-        
+
             ncnn_graph_helper.node(
                 layer['layer']['name'],
                 keras_graph_helper.get_node_inbounds(
@@ -129,7 +129,7 @@ class KerasConverter:
                         kernel_h=kernel_h,
                         dilation_h=dilation_h,
                         stride_h=stride_h)
-                    
+
                     ncnn_graph_helper.node(
                         layer['layer']['name'],
                         keras_graph_helper.get_node_inbounds(
@@ -148,7 +148,8 @@ class KerasConverter:
                     outbound_layers = []
 
                     for name in keras_graph_helper.get_graph().keys():
-                        for node in keras_graph_helper.get_graph()[name]['inbounds']:
+                        for node in keras_graph_helper.get_graph()[
+                                name]['inbounds']:
                             if layer['layer']['name'] == node:
                                 outbound_layers.append(name)
 
@@ -173,9 +174,8 @@ class KerasConverter:
                     layer['layer']['config']['activation'])
                 frameinfo = inspect.getframeinfo(inspect.currentframe())
                 print('Failed to convert at %s:%d %s()' %
-                    (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                      (frameinfo.filename, frameinfo.lineno, frameinfo.function))
                 sys.exit(-1)
-                   
 
     def Conv2DTranspose_helper(self, layer, keras_graph_helper,
                                ncnn_graph_helper, ncnn_helper):
@@ -353,7 +353,7 @@ class KerasConverter:
             'sigmoid': 4
         }
 
-        # Fetch weight 
+        # Fetch weight
         dw_weight = np.insert(
             np.transpose(
                 layer['weight']['depthwise_kernel:0'], [
@@ -408,8 +408,11 @@ class KerasConverter:
                 layer['layer']['name']))
 
         ncnn_graph_helper.set_node_attr(
-            layer['layer']['name']  + '_dw', {
-                'type': 'ConvolutionDepthWise', 'param': ncnn_graph_attr, 'binary': [dw_weight]})
+            layer['layer']['name'] + '_dw',
+            {
+                'type': 'ConvolutionDepthWise',
+                'param': ncnn_graph_attr,
+                'binary': [dw_weight]})
 
         # Fill pwconv params
         num_output = layer['layer']['config']['filters']
@@ -450,7 +453,7 @@ class KerasConverter:
 
         ncnn_graph_helper.node(
             layer['layer']['name'],
-            [layer['layer']['name']+'_dw'])
+            [layer['layer']['name'] + '_dw'])
 
         if bias_term:
             ncnn_graph_helper.set_node_attr(
@@ -507,7 +510,8 @@ class KerasConverter:
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        ncnn_graph_attr = ncnn_helper.dump_args('BinaryOp', op_type=0, with_scalar=0)
+        ncnn_graph_attr = ncnn_helper.dump_args(
+            'BinaryOp', op_type=0, with_scalar=0)
 
         ncnn_graph_helper.node(
             layer['layer']['name'],
@@ -523,7 +527,8 @@ class KerasConverter:
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        ncnn_graph_attr = ncnn_helper.dump_args('BinaryOp', op_type=2, with_scalar=0)
+        ncnn_graph_attr = ncnn_helper.dump_args(
+            'BinaryOp', op_type=2, with_scalar=0)
 
         ncnn_graph_helper.node(
             layer['layer']['name'],
@@ -540,7 +545,13 @@ class KerasConverter:
             ncnn_graph_helper,
             ncnn_helper):
 
-        SUPPORTED_ACTIVATION = ['relu', 'relu6', 'sigmoid', 'softmax']
+        SUPPORTED_ACTIVATION = [
+            'relu',
+            '_relu6',
+            'sigmoid',
+            'softmax',
+            '_hard_swish',
+            'hard_sigmoid']
 
         if layer['layer']['config']['activation'] not in SUPPORTED_ACTIVATION:
             print(
@@ -551,13 +562,14 @@ class KerasConverter:
                   (frameinfo.filename, frameinfo.lineno, frameinfo.function))
             sys.exit(-1)
 
-        if layer['layer']['config']['activation'] in ['relu', 'relu6']:
+        if layer['layer']['config']['activation'] in [
+                'relu', 'relu6', '_relu6']:
             if 'alpha' in layer['layer']['config'].keys():
                 negative_slope = layer['layer']['config']['alpha']
             else:
                 negative_slope = 0.0
 
-            if layer['layer']['config']['activation'] == 'relu6':
+            if layer['layer']['config']['activation'] in ['relu6', '_relu6']:
                 layer['layer']['config']['max_value'] = 6.0
                 layer['layer']['config']['activation'] = 'relu'
 
@@ -628,6 +640,26 @@ class KerasConverter:
             ncnn_graph_helper.set_node_attr(
                 layer['layer']['name'], {
                     'type': 'Softmax', 'param': ncnn_graph_attr, 'binary': []})
+
+        if layer['layer']['config']['activation'] == '_hard_swish':
+            ncnn_graph_attr = ncnn_helper.dump_args('HardSwish')
+            ncnn_graph_helper.node(
+                layer['layer']['name'],
+                keras_graph_helper.get_node_inbounds(
+                    layer['layer']['name']))
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'HardSwish', 'param': ncnn_graph_attr, 'binary': []})
+
+        if layer['layer']['config']['activation'] == 'hard_sigmoid':
+            ncnn_graph_attr = ncnn_helper.dump_args('HardSigmoid')
+            ncnn_graph_helper.node(
+                layer['layer']['name'],
+                keras_graph_helper.get_node_inbounds(
+                    layer['layer']['name']))
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'HardSigmoid', 'param': ncnn_graph_attr, 'binary': []})
 
     def Flatten_helper(
             self,
@@ -762,7 +794,7 @@ class KerasConverter:
             ncnn_graph_helper,
             ncnn_helper):
 
-        SUPPORTED_ACTIVATION = ['', 'linear', 'softmax']
+        SUPPORTED_ACTIVATION = ['', 'linear', 'softmax', 'hard_sigmoid']
         SUPPORTED_FUSED_ACTIVATION_TYPE = {
             'relu': 1,
             'sigmoid': 4
@@ -845,6 +877,45 @@ class KerasConverter:
                 keras_graph_helper.add_node_inbounds(
                     outbound_layer, layer['layer']['name'] + '_Softmax')
 
+        if layer['layer']['config']['activation'] == 'hard_sigmoid':
+            ncnn_graph_attr = ncnn_helper.dump_args(
+                'InnerProduct',
+                num_output=num_output,
+                bias_term=1,
+                weight_data_size=weight_data_size)
+            ncnn_graph_helper.node(
+                layer['layer']['name'],
+                keras_graph_helper.get_node_inbounds(
+                    layer['layer']['name']))
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'InnerProduct', 'param': ncnn_graph_attr, 'binary': [
+                        bn_params['bn_kernel'], bn_params['bn_bias']]})
+
+            outbound_layers = []
+
+            for name in keras_graph_helper.get_graph().keys():
+                for node in keras_graph_helper.get_graph()[
+                        name]['inbounds']:
+                    if layer['layer']['name'] == node:
+                        outbound_layers.append(name)
+
+            ncnn_graph_attr = ncnn_helper.dump_args('HardSigmoid')
+            ncnn_graph_helper.node(
+                layer['layer']['name'] + '_HardSigmoid', [layer['layer']['name'], ])
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'] + '_HardSigmoid', {
+                    'type': 'HardSigmoid', 'param': ncnn_graph_attr, 'binary': []})
+
+            keras_graph_helper.node(
+                layer['layer']['name'] + '_HardSigmoid', [layer['layer']['name'], ])
+
+            for outbound_layer in outbound_layers:
+                keras_graph_helper.remove_node_inbounds(
+                    outbound_layer, layer['layer']['name'])
+                keras_graph_helper.add_node_inbounds(
+                    outbound_layer, layer['layer']['name'] + '_HardSigmoid')
+
         if layer['layer']['config']['activation'] in SUPPORTED_FUSED_ACTIVATION_TYPE:
             ncnn_graph_attr = ncnn_helper.dump_args(
                 'InnerProduct',
@@ -894,7 +965,7 @@ class KerasConverter:
             ncnn_graph_helper,
             ncnn_helper):
         ncnn_graph_attr = ncnn_helper.dump_args(
-            'Interp', 
+            'Interp',
             resize_type=2,
             output_height=layer['layer']['config']['output_size'][0],
             output_width=layer['layer']['config']['output_size'][1])
@@ -1004,6 +1075,7 @@ class KerasConverter:
         ncnn_graph_helper.set_node_attr(
             layer['layer']['name'], {
                 'type': 'Reshape', 'param': ncnn_graph_attr, 'binary': []})
+
     def Cropping2D_helper(
             self,
             layer,
@@ -1143,7 +1215,8 @@ class KerasConverter:
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        ncnn_graph_attr = ncnn_helper.dump_args('BinaryOp', op_type=4, with_scalar=0)
+        ncnn_graph_attr = ncnn_helper.dump_args(
+            'BinaryOp', op_type=4, with_scalar=0)
 
         ncnn_graph_helper.node(
             layer['layer']['name'],
@@ -1169,9 +1242,9 @@ class KerasConverter:
             print('=========================================')
             frameinfo = inspect.getframeinfo(inspect.currentframe())
             print('Failed to convert at %s:%d %s()' %
-                    (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                  (frameinfo.filename, frameinfo.lineno, frameinfo.function))
             sys.exit(-1)
-        
+
         if operator == 'Mul':
             # Create a MemoryData for storing the constant
             constant = layer['layer']['config']['constants']
@@ -1182,9 +1255,9 @@ class KerasConverter:
                 print('=========================================')
                 frameinfo = inspect.getframeinfo(inspect.currentframe())
                 print('Failed to convert at %s:%d %s()' %
-                        (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+                      (frameinfo.filename, frameinfo.lineno, frameinfo.function))
                 sys.exit(-1)
-            
+
             # ncnn_graph_attr = ncnn_helper.dump_args('MemoryData', w=1)
             # ncnn_graph_helper.node(
             #     layer['layer']['name']+'_const', [])
@@ -1193,7 +1266,8 @@ class KerasConverter:
             #         'type': 'MemoryData', 'param': ncnn_graph_attr, 'binary': [[constant['0']]]})
 
             # Insert the mul layer
-            ncnn_graph_attr = ncnn_helper.dump_args('BinaryOp', op_type=2, with_scalar=1, b=constant['0'])
+            ncnn_graph_attr = ncnn_helper.dump_args(
+                'BinaryOp', op_type=2, with_scalar=1, b=constant['0'])
 
             ncnn_graph_helper.node(
                 layer['layer']['name'],
@@ -1202,7 +1276,6 @@ class KerasConverter:
             ncnn_graph_helper.set_node_attr(
                 layer['layer']['name'], {
                     'type': 'BinaryOp', 'param': ncnn_graph_attr, 'binary': []})
-
 
     def insert_split(
             self,
