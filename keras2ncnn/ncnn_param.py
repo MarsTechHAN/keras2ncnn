@@ -146,6 +146,16 @@ class NcnnParamDispatcher:
             1: {'stride': 0},
         },
 
+        'HardSwish': {
+            0: {'alpha': 0.1666667},
+            1: {'beta': 0.5}
+        },
+
+        'HardSigmoid': {
+            0: {'alpha': 0.181818}, # Pytorch take +/- 3, Keras take +/- 2.5
+            1: {'beta': 0.454545}
+        },
+
         'Reshape': {
             0: {'w': -233},
             1: {'h': -233},
