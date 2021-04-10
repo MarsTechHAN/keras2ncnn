@@ -536,7 +536,7 @@ class KerasConverter:
                 layer['layer']['name']))
         ncnn_graph_helper.set_node_attr(
             layer['layer']['name'], {
-                'type': 'Eltwise', 'param': ncnn_graph_attr, 'binary': []})
+                'type': 'BinaryOp', 'param': ncnn_graph_attr, 'binary': []})
 
     def Activation_helper(
             self,
@@ -547,6 +547,7 @@ class KerasConverter:
 
         SUPPORTED_ACTIVATION = [
             'relu',
+            'relu6',
             '_relu6',
             'sigmoid',
             'softmax',
@@ -569,7 +570,7 @@ class KerasConverter:
             else:
                 negative_slope = 0.0
 
-            if layer['layer']['config']['activation'] in ['relu6', '_relu6']:
+            if '_relu6' in layer['layer']['config']['activation']:
                 layer['layer']['config']['max_value'] = 6.0
                 layer['layer']['config']['activation'] = 'relu'
 
