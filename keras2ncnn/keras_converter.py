@@ -1050,14 +1050,15 @@ class KerasConverter:
         else:
             if(len(target_shape) == 3):
                 ncnn_graph_attr = ncnn_helper.dump_args(
-                    'Reshape', w=target_shape[1], h=target_shape[2])
+                    'Reshape', w=target_shape[1], h=target_shape[0], c=target_shape[2])
             else:
                 if(len(target_shape) == 2):
                     ncnn_graph_attr = ncnn_helper.dump_args(
-                        'Reshape', w=target_shape[1])
+                        'Reshape', w=target_shape[1], h=target_shape[0])
                 else:
                     if(len(target_shape) == 1):
-                        return
+                        ncnn_graph_attr = ncnn_helper.dump_args(
+                            'Reshape', w=target_shape[0])
                     else:
                         print(
                             '[ERROR] Reshape Layer Dim %d is not supported.' %
