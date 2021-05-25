@@ -106,27 +106,32 @@ class H5dfParser:
         return inbound_nodes
 
     def parse_graph(self, graph_helper):
-        self.joined_layers = []
-        layer_idx = 0
+        has_input_layer = False
+        for layers in self.model_config['config']['layers']:
+            if layers['class_name'] == 'InputLayer':
+                has_input_layer = True
+            if layers['class_name'] == 'Model':
+                for layer in model_layers:
+                    if layers['class_name'] == 'InputLayer':
+                        has_input_layer = True
+
+        if not has_input_layer:
+            graph_helper.node('dummy_input_layer', [])
+            graph_helper.set_node_attr(
+                'dummy_input_layer', {
+                    'layer': {
+                        'name': 'dummy_input_layer',
+                        'class_name': 'InputLayer',
+                        'config': {
+                            'batch_input_shape': [-1, -1, -1, -1]
+                        }
+                    }, 'weight': None})
+
         for layers in self.model_config['config']['layers']:
             if layers['class_name'] == 'Model':
                 self.parse_model_graph(
                     layers['config']['layers'], graph_helper)
             else:
-                if layer_idx == 0 and layers['class_name'] != 'InputLayer':
-                    layer_idx += 1
-
-                    graph_helper.node('dummy_input_layer', [])
-                    graph_helper.set_node_attr(
-                        'dummy_input_layer', {
-                            'layer': {
-                                'name': 'dummy_input_layer',
-                                'class_name': 'InputLayer',
-                                'config': {
-                                    'batch_input_shape': [-1, -1, -1, -1]
-                                }
-                            }, 'weight': None})
-
                 if layers['class_name'] == 'TensorFlowOpLayer':
                     layer_name = layers['name']
                 else:
@@ -134,13 +139,11 @@ class H5dfParser:
                     layers['name'] = layers['config']['name']
 
                 inbound_nodes = self.join_inbound_nodes(layers)
-                if len(inbound_nodes) == 0:
+                if len(inbound_nodes) == 0 and layers['class_name'] not in [
+                        'InputLayer', 'Const', 'Identity']:
                     inbound_nodes = graph_helper.get_graph_tail()
 
-                graph_helper.node(
-                    layer_name,
-                    inbound_nodes +
-                    ['dummy_input_layer'] if layers['class_name'] != 'InputLayer' else [])
+                graph_helper.node(layer_name, inbound_nodes)
                 graph_helper.set_node_attr(
                     layer_name, {
                         'layer': layers, 'weight': self.find_weights_root(
