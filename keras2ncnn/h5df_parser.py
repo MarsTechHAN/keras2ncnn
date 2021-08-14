@@ -55,16 +55,16 @@ class H5dfParser:
 
     def get_keras_version(self):
         if 'keras_version' in self.f['model_weights'].attrs:
-            original_keras_version = self.__decode(self.f['model_weights']
-                                                   .attrs['keras_version'])
+            original_keras_version = self.__decode(self.f['model_weights']\
+                .attrs['keras_version'])
             return original_keras_version
         else:
             return '1'
 
     def get_backend_version(self):
         if 'backend' in self.f['model_weights'].attrs:
-            original_backend = self.__decode(self.f['model_weights']
-                                             .attrs['backend'])
+            original_backend = self.__decode(self.f['model_weights']\
+                .attrs['backend'])
             return original_backend
         else:
             return None
@@ -106,29 +106,10 @@ class H5dfParser:
         return inbound_nodes
 
     def parse_graph(self, graph_helper):
-        has_input_layer = False
+        self.joined_layers = []
         for layers in self.model_config['config']['layers']:
-            if layers['class_name'] == 'InputLayer':
-                has_input_layer = True
-            if layers['class_name'] == 'Model':
-                for layer in model_layers:
-                    if layers['class_name'] == 'InputLayer':
-                        has_input_layer = True
-
-        if not has_input_layer:
-            graph_helper.node('dummy_input_layer', [])
-            graph_helper.set_node_attr(
-                'dummy_input_layer', {
-                    'layer': {
-                        'name': 'dummy_input_layer',
-                        'class_name': 'InputLayer',
-                        'config': {
-                            'batch_input_shape': [-1, -1, -1, -1]
-                        }
-                    }, 'weight': None})
-
-        for layers in self.model_config['config']['layers']:
-            if layers['class_name'] == 'Model':
+            if layers['class_name'] == 'Model' or \
+                layers['class_name'] == 'Functional':
                 self.parse_model_graph(
                     layers['config']['layers'], graph_helper)
             else:
@@ -139,8 +120,7 @@ class H5dfParser:
                     layers['name'] = layers['config']['name']
 
                 inbound_nodes = self.join_inbound_nodes(layers)
-                if len(inbound_nodes) == 0 and layers['class_name'] not in [
-                        'InputLayer', 'Const', 'Identity']:
+                if len(inbound_nodes) == 0:
                     inbound_nodes = graph_helper.get_graph_tail()
 
                 graph_helper.node(layer_name, inbound_nodes)
@@ -152,6 +132,8 @@ class H5dfParser:
     def parse_model_graph(self, model_layers, graph_helper):
         for layer in model_layers:
             inbound_nodes = self.join_inbound_nodes(layer)
+            if len(inbound_nodes) == 0:
+                inbound_nodes = graph_helper.get_graph_tail()
 
             graph_helper.node(layer['name'], inbound_nodes)
             graph_helper.set_node_attr(
