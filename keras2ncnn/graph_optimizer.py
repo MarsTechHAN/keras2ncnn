@@ -7,7 +7,10 @@ class GraphOptimization:
 
         for target_node_name in graph.get_graph().keys():
             if graph.get_node_attr(target_node_name)[
-                    'layer']['class_name'] in UNUSED_NODES:
+                    'layer']['class_name'] in UNUSED_NODES or \
+                (   graph.get_node_attr(target_node_name)[
+                    'layer']['class_name'] == 'InputLayer' and \
+                    len(graph.get_node_inbounds(target_node_name)) != 0 ):
                 for layer_name in graph.get_graph().keys():
                     if target_node_name in graph.get_graph()[
                             layer_name]['inbounds']:
