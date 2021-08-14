@@ -1078,6 +1078,50 @@ class KerasConverter:
             layer['layer']['name'], {
                 'type': 'Reshape', 'param': ncnn_graph_attr, 'binary': []})
 
+    def Permute_helper(
+            self,
+            layer,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper):
+        PERMUTE_LUT = {
+            # Dim=2
+            '1,2': (2, 0),
+            '2,1': (2, 1),
+
+            # Dim=3
+            '1,2,3': (3, 0),
+            '1,3,2': (3, 5),
+            '2,1,3': (3, 1),
+            '2,3,1': (3, 4),
+            '3,1,2': (3, 3),
+            '3,2,1': (3, 2),
+        }
+
+        dims = layer['layer']['config']['dims']
+        if(len(dims) in [2, 3]):
+            order_type = PERMUTE_LUT[','.join(list(map(str, dims)))]
+        else:
+            print(
+                '[ERROR] Permute Layer Dim [%s] is not supported.' %
+                str(dims))
+            frameinfo = inspect.getframeinfo(
+                inspect.currentframe())
+            print(
+                'Failed to convert at %s:%d %s()' %
+                (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            sys.exit(-1)
+
+        ncnn_graph_attr = ncnn_helper.dump_args(
+                'Permute', order_type=order_type)
+        ncnn_graph_helper.node(
+            layer['layer']['name'],
+            keras_graph_helper.get_node_inbounds(
+                layer['layer']['name']))
+        ncnn_graph_helper.set_node_attr(
+            layer['layer']['name'], {
+                'type': 'Permute', 'param': ncnn_graph_attr, 'binary': []})
+        
     def Cropping2D_helper(
             self,
             layer,

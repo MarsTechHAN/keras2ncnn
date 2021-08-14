@@ -163,6 +163,10 @@ class NcnnParamDispatcher:
             3: {'flag': 1}
         },
 
+        'Permute': {
+            0: {'order_type': 0}
+        },
+
         'Sigmoid': {
         },
 
@@ -204,7 +208,7 @@ class NcnnParamDispatcher:
                 ncnn_args_phrase = ncnn_args_phrase + \
                     '%d=%e ' % (arg, params_arg)
 
-            elif isinstance(params_arg, list):
+            elif isinstance(params_arg, (list, tuple)):
                 ncnn_args_phrase = ncnn_args_phrase + \
                     '%d=%d,%s ' % (-23300 - arg, len(params_arg),
                                    ','.join(list(map(str, params_arg))))

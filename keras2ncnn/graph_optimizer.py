@@ -2,7 +2,7 @@ class GraphOptimization:
 
     @staticmethod
     def removing_unused_nodes(graph):
-        UNUSED_NODES = ['Dropout', 'Lambda']
+        UNUSED_NODES = ['Dropout', 'Lambda', 'TimeDistributed']
         nodes_to_remove = []
 
         for target_node_name in graph.get_graph().keys():
