@@ -22,7 +22,7 @@ class H5dfParser:
             print('[ERROR] Failed to read h5df file.')
             print('You are not selecting a valid keras model file.')
             print('You can check it by either opening it by Keras or Netron.')
-            print('If you are very confident of your file, please repoert a bug at:')
+            print('If you are very confident of your file, please report a bug at:')
             print('https://github.com/MarsTechHAN/keras2ncnn')
             sys.exit(-1)
 
@@ -32,7 +32,7 @@ class H5dfParser:
             print('Such issue may caused by following ways:')
             print('\t1. You are using model.save_weights instead of model.save')
             print('\t2. You are trying to load a weight file download from somewhere.')
-            print('If you are very confident of your file, please repoert a bug at:')
+            print('If you are very confident of your file, please report a bug at:')
             print('https://github.com/MarsTechHAN/keras2ncnn')
             sys.exit(-1)
 
