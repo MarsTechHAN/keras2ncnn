@@ -39,6 +39,24 @@ class H5dfParser:
         self.model_config = json.loads(self.__decode(model_config_raw))
         self.keras_version = self.get_keras_version()
 
+        try:
+            import tensorflow.keras as keras
+        except ModuleNotFoundError:
+            try:
+                import keras
+            except ModuleNotFoundError:
+                pass
+
+        try:
+            model = keras.models.load_model(h5_file)
+            self.layer_input_shapes = {layer.name: layer.input_shape for layer in model.layers}
+        except NameError:
+            self.layer_input_shapes = None
+        except Exception as e:
+            print(f"Exception {e} occurred when attempting to load model in keras. Will attempt conversion without "
+                  f"additional information.")
+            self.layer_input_shapes = None
+
         if self.keras_version != '1':
             weight_layers = self.f['model_weights']
         else:
@@ -124,10 +142,16 @@ class H5dfParser:
                     inbound_nodes = graph_helper.get_graph_tail()
 
                 graph_helper.node(layer_name, inbound_nodes)
-                graph_helper.set_node_attr(
-                    layer_name, {
-                        'layer': layers, 'weight': self.find_weights_root(
-                            layer_name)})
+                if self.layer_input_shapes is None:
+                    graph_helper.set_node_attr(
+                        layer_name, {
+                            'layer': layers, 'weight': self.find_weights_root(
+                                layer_name)})
+                else:
+                    graph_helper.set_node_attr(
+                        layer_name, {
+                            'layer': layers, 'weight': self.find_weights_root(
+                                layer_name), 'input_shape': self.layer_input_shapes[layer_name]})
 
     def parse_model_graph(self, model_layers, graph_helper):
         for layer in model_layers:
@@ -136,7 +160,13 @@ class H5dfParser:
                 inbound_nodes = graph_helper.get_graph_tail()
 
             graph_helper.node(layer['name'], inbound_nodes)
-            graph_helper.set_node_attr(
-                layer['name'], {
-                    'layer': layer, 'weight': self.find_weights_root(
-                        layer['name'])})
+            if self.layer_input_shapes is None:
+                graph_helper.set_node_attr(
+                    layer['name'], {
+                        'layer': layer, 'weight': self.find_weights_root(
+                            layer['name'])})
+            else:
+                graph_helper.set_node_attr(
+                    layer['name'], {
+                        'layer': layer, 'weight': self.find_weights_root(
+                            layer['name']), 'input_shape': self.layer_input_shapes[layer['name']]})
