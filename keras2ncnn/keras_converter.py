@@ -504,6 +504,55 @@ class KerasConverter:
                     bn_params['bn_moving_variance'],
                     bn_params['bn_beta']]})
 
+    def Resizing_helper(
+            self,
+            layer,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper):
+        if "crop_to_aspect_ratio" in layer["layer"]["config"] and \
+                layer["layer"]["config"]["crop_to_aspect_ratio"]:
+            print(f'[ERROR] Crop to aspect ratio is currently not supported for Resizing layers.')
+            frameinfo = inspect.getframeinfo(inspect.currentframe())
+            print('Failed to convert at %s:%d %s()' %
+                  (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            sys.exit(-1)
+        # Set the interpolation type and make sure it is supported.
+        if layer["layer"]["config"]["interpolation"].lower() == "bilinear":
+            resize_type = 2
+        elif layer["layer"]["config"]["interpolation"].lower() == "nearest":
+            resize_type = 1
+        else:
+            print(f'[ERROR] Activation type {layer.interpolation} is is not supported yet. '
+                  f'Currently, only bilinear and nearest are supported as Resizing layer interpolation types.')
+            frameinfo = inspect.getframeinfo(inspect.currentframe())
+            print('Failed to convert at %s:%d %s()' %
+                  (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            sys.exit(-1)
+        if "input_shape" in layer:
+            height_scale = layer["layer"]["config"]["height"] / layer["input_shape"][1]
+            width_scale = layer["layer"]["config"]["width"] / layer["input_shape"][2]
+            output_height = layer["layer"]["config"]["height"]
+            output_width = layer["layer"]["config"]["width"]
+        else:
+            print(f'[ERROR] Could not find input shape for Resizing layer. Please make sure you have either tensorflow '
+                  f'or keras installed.')
+            frameinfo = inspect.getframeinfo(inspect.currentframe())
+            print('Failed to convert at %s:%d %s()' %
+                  (frameinfo.filename, frameinfo.lineno, frameinfo.function))
+            sys.exit(-1)
+        ncnn_graph_attr = ncnn_helper.dump_args(
+            'Interp', resize_type=resize_type, height_scale=height_scale, width_scale=width_scale,
+            output_height=output_height, output_width=output_width
+        )
+        ncnn_graph_helper.node(
+            layer['layer']['name'],
+            keras_graph_helper.get_node_inbounds(
+                layer['layer']['name']))
+        ncnn_graph_helper.set_node_attr(
+            layer['layer']['name'], {
+                'type': 'Interp', 'param': ncnn_graph_attr, 'binary': []})
+
     def Add_helper(
             self,
             layer,

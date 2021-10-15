@@ -43,6 +43,7 @@ python3 -m keras2ncnn -i SOME_H5DF_FILE.h5 -o DIR_TO_SAVE_NCNN_PARAM --plot_grap
 - Maximum
 - TensorFlowOpLayer (Mul with constant)
 - Permute (Need more testing)
+- Resizing (Requires tensorflow/keras for conversion)
 
 ## Ops that will be dropped by converter
 - Dropout
