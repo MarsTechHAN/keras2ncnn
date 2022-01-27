@@ -121,6 +121,9 @@ class NcnnParamDispatcher:
             4: {'output_width': 0},
         },
 
+        'TanH': {
+        },
+
         'Padding': {
             0: {'top': 0},
             1: {'bottom': 0},
@@ -175,7 +178,6 @@ class NcnnParamDispatcher:
         },
 
         'Split': {
-
         },
 
         'MemoryData': {

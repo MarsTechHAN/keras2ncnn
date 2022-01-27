@@ -795,7 +795,7 @@ class KerasConverter:
             ncnn_graph_helper,
             ncnn_helper):
 
-        SUPPORTED_ACTIVATION = ['', 'linear', 'softmax', 'hard_sigmoid']
+        SUPPORTED_ACTIVATION = ['', 'linear', 'softmax', 'hard_sigmoid', 'tanh']
         SUPPORTED_FUSED_ACTIVATION_TYPE = {
             'relu': 1,
             'sigmoid': 4
@@ -877,6 +877,45 @@ class KerasConverter:
                     outbound_layer, layer['layer']['name'])
                 keras_graph_helper.add_node_inbounds(
                     outbound_layer, layer['layer']['name'] + '_Softmax')
+
+        if layer['layer']['config']['activation'] == 'tanh':
+            ncnn_graph_attr = ncnn_helper.dump_args(
+                'InnerProduct',
+                num_output=num_output,
+                bias_term=1,
+                weight_data_size=weight_data_size)
+            ncnn_graph_helper.node(
+                layer['layer']['name'],
+                keras_graph_helper.get_node_inbounds(
+                    layer['layer']['name']))
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'], {
+                    'type': 'InnerProduct', 'param': ncnn_graph_attr, 'binary': [
+                        bn_params['bn_kernel'], bn_params['bn_bias']]})
+
+            outbound_layers = []
+
+            for name in keras_graph_helper.get_graph().keys():
+                for node in keras_graph_helper.get_graph()[
+                        name]['inbounds']:
+                    if layer['layer']['name'] == node:
+                        outbound_layers.append(name)
+
+            ncnn_graph_attr = ncnn_helper.dump_args('TanH')
+            ncnn_graph_helper.node(
+                layer['layer']['name'] + '_TanH', [layer['layer']['name'], ])
+            ncnn_graph_helper.set_node_attr(
+                layer['layer']['name'] + '_TanH', {
+                    'type': 'TanH', 'param': ncnn_graph_attr, 'binary': []})
+
+            keras_graph_helper.node(
+                layer['layer']['name'] + '_TanH', [layer['layer']['name'], ])
+
+            for outbound_layer in outbound_layers:
+                keras_graph_helper.remove_node_inbounds(
+                    outbound_layer, layer['layer']['name'])
+                keras_graph_helper.add_node_inbounds(
+                    outbound_layer, layer['layer']['name'] + '_TanH')
 
         if layer['layer']['config']['activation'] == 'hard_sigmoid':
             ncnn_graph_attr = ncnn_helper.dump_args(
