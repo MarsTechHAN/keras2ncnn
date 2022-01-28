@@ -107,36 +107,57 @@ class H5dfParser:
 
     def parse_graph(self, graph_helper):
         self.joined_layers = []
-        for layers in self.model_config['config']['layers']:
-            if layers['class_name'] == 'Model' or \
-                layers['class_name'] == 'Functional':
-                self.parse_model_graph(
-                    layers['config']['layers'], graph_helper)
-            else:
-                if layers['class_name'] == 'TensorFlowOpLayer':
-                    layer_name = layers['name']
-                else:
-                    layer_name = layers['config']['name']
-                    layers['name'] = layers['config']['name']
+        if isinstance(self.model_config['config'], list):
+            self.parse_model_graph(self.model_config['config'],
+                                    graph_helper)
+            return
+        elif isinstance(self.model_config['config'], dict):
+            if 'layers' in self.model_config['config'].keys():
+                for layers in self.model_config['config']['layers']:
+                    if layers['class_name'] == 'Model' or \
+                        layers['class_name'] == 'Functional':
+                        self.parse_model_graph(
+                            layers['config']['layers'], graph_helper)
+                    else:
+                        if layers['class_name'] == 'TensorFlowOpLayer':
+                            layer_name = layers['name']
+                        else:
+                            layer_name = layers['config']['name']
+                            layers['name'] = layers['config']['name']
 
-                inbound_nodes = self.join_inbound_nodes(layers)
-                if len(inbound_nodes) == 0:
-                    inbound_nodes = graph_helper.get_graph_tail()
+                        inbound_nodes = self.join_inbound_nodes(layers)
+                        if len(inbound_nodes) == 0:
+                            inbound_nodes = graph_helper.get_graph_tail()
 
-                graph_helper.node(layer_name, inbound_nodes)
-                graph_helper.set_node_attr(
-                    layer_name, {
-                        'layer': layers, 'weight': self.find_weights_root(
-                            layer_name)})
+                        graph_helper.node(layer_name, inbound_nodes)
+                        graph_helper.set_node_attr(
+                            layer_name, {
+                                'layer': layers, 'weight': self.find_weights_root(
+                                    layer_name)})
+                return
+
+        print('[ERROR] Failed to load model config from h5df file.')
+        print('You may use an unsupported version of keras h5df format.')
+        print('Please report a bug and attach your file at:')
+        print('https://github.com/MarsTechHAN/keras2ncnn')
+        sys.exit(-1)
+                
 
     def parse_model_graph(self, model_layers, graph_helper):
+        layer_idx = 0
         for layer in model_layers:
             inbound_nodes = self.join_inbound_nodes(layer)
             if len(inbound_nodes) == 0:
                 inbound_nodes = graph_helper.get_graph_tail()
-
+            if 'name' in layer.keys():
+                pass
+            elif 'name' in layer['config'].keys():
+                layer['name'] = layer['config']['name']
+            else:
+                layer['name'] = layer['class_name'] + '_' + str(layer_idx)
             graph_helper.node(layer['name'], inbound_nodes)
             graph_helper.set_node_attr(
                 layer['name'], {
                     'layer': layer, 'weight': self.find_weights_root(
                         layer['name'])})
+            layer_idx += 1
