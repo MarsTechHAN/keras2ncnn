@@ -570,7 +570,8 @@ class KerasConverter:
             else:
                 negative_slope = 0.0
 
-            if '_relu6' in layer['layer']['config']['activation']:
+            if '_relu6' in layer['layer']['config']['activation'] or \
+                    'relu6' in layer['layer']['config']['activation']:
                 layer['layer']['config']['max_value'] = 6.0
                 layer['layer']['config']['activation'] = 'relu'
 
