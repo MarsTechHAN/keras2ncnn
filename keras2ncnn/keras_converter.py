@@ -504,22 +504,41 @@ class KerasConverter:
                     bn_params['bn_moving_variance'],
                     bn_params['bn_beta']]})
 
+    def insert_binary_op(
+            self,
+            layer,
+            op_type,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper):
+        ncnn_graph_attr = ncnn_helper.dump_args(
+            'BinaryOp', op_type=op_type, with_scalar=0)
+        inbounds = keras_graph_helper.get_node_inbounds(layer['layer']['name'])
+        last_node_name = inbounds[0]
+        for node_idx in range(1, len(inbounds)):
+            if node_idx == len(inbounds) - 1:
+                node_name = layer['layer']['name']
+            else:
+                node_name = layer['layer']['name']+'_slop_'+str(node_idx)
+            ncnn_graph_helper.node(
+                node_name,
+            [last_node_name, inbounds[node_idx]])
+            ncnn_graph_helper.set_node_attr(
+                node_name, {
+                    'type': 'BinaryOp', 'param': ncnn_graph_attr, 'binary': []})
+            last_node_name = node_name
+
     def Add_helper(
             self,
             layer,
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        ncnn_graph_attr = ncnn_helper.dump_args(
-            'BinaryOp', op_type=0, with_scalar=0)
-
-        ncnn_graph_helper.node(
-            layer['layer']['name'],
-            keras_graph_helper.get_node_inbounds(
-                layer['layer']['name']))
-        ncnn_graph_helper.set_node_attr(
-            layer['layer']['name'], {
-                'type': 'BinaryOp', 'param': ncnn_graph_attr, 'binary': []})
+        self.insert_binary_op(layer,
+            0,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper)
 
     def Multiply_helper(
             self,
@@ -527,16 +546,11 @@ class KerasConverter:
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        ncnn_graph_attr = ncnn_helper.dump_args(
-            'BinaryOp', op_type=2, with_scalar=0)
-
-        ncnn_graph_helper.node(
-            layer['layer']['name'],
-            keras_graph_helper.get_node_inbounds(
-                layer['layer']['name']))
-        ncnn_graph_helper.set_node_attr(
-            layer['layer']['name'], {
-                'type': 'BinaryOp', 'param': ncnn_graph_attr, 'binary': []})
+        self.insert_binary_op(layer,
+            2,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper)
 
     def Activation_helper(
             self,
@@ -1301,16 +1315,11 @@ class KerasConverter:
             keras_graph_helper,
             ncnn_graph_helper,
             ncnn_helper):
-        ncnn_graph_attr = ncnn_helper.dump_args(
-            'BinaryOp', op_type=4, with_scalar=0)
-
-        ncnn_graph_helper.node(
-            layer['layer']['name'],
-            keras_graph_helper.get_node_inbounds(
-                layer['layer']['name']))
-        ncnn_graph_helper.set_node_attr(
-            layer['layer']['name'], {
-                'type': 'BinaryOp', 'param': ncnn_graph_attr, 'binary': []})
+        self.insert_binary_op(layer,
+            4,
+            keras_graph_helper,
+            ncnn_graph_helper,
+            ncnn_helper)
 
     def TensorFlowOpLayer_helper(
             self,
