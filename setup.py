@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="keras2ncnn",
-    version="0.1.4",
+    version="0.2.0",
     author="Han Xiao",
     author_email="hansh-sz@hotmail.com",
     description="A keras h5df to ncnn converter",
