@@ -1,5 +1,6 @@
 import inspect
 import sys
+import copy
 
 
 class NcnnParamDispatcher:
@@ -189,7 +190,7 @@ class NcnnParamDispatcher:
     }
 
     def dump_args(self, operator, **kwargs):
-        params = self.operation_param_table[operator]
+        params = copy.deepcopy(self.operation_param_table[operator])
         ncnn_args_phrase = ''
         for arg in params.keys():
             arg_name = list(params[arg].keys())[0]
