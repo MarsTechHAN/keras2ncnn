@@ -74,7 +74,7 @@ int main(int argc, char** argv)
 '''
 
     input_extractor_template = '\tncnn::Mat $layer_name_rep$_blob;\n'\
-        '\t$layer_name_rep$_blob.create($input_shape$, 4u);\n'\
+        '\t$layer_name_rep$_blob.create($input_shape$);\n'\
         '\trand_mat($layer_name_rep$_blob);\n'\
         '\tex.input("$layer_name$_blob", $layer_name_rep$_blob);\n\n'
 
@@ -279,7 +279,7 @@ int main(int argc, char** argv)
 
     def decode(self, h5_file, keras_graph, graph_seq):
         import numpy as np  # pylint: disable=import-outside-toplevel
-        from tensorflow.python import keras  # pylint: disable=import-outside-toplevel
+        # from tensorflow import keras  # pylint: disable=import-outside-toplevel
         from tensorflow.python.keras import backend as K  # pylint: disable=import-outside-toplevel
         from tensorflow.python.keras.models import model_from_json
         K.set_learning_phase(0)
@@ -366,7 +366,7 @@ int main(int argc, char** argv)
         for func_idx in range(len(output_node_names)):
 
             functor = K.function(inputs[func_idx], output_nodes[func_idx])
-            layer_outs = functor(input_images + [1, ])
+            layer_outs = functor(input_images )
             keras_layer_dumps_list.append(
                 dict(zip(output_node_names[func_idx], layer_outs)))
 
