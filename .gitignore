@@ -130,6 +130,7 @@ dmypy.json
 
 # Keras files
 *.h5
+*.h5df
 
 # ncnn files
 *.param
